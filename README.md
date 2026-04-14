@@ -171,4 +171,6 @@ Gia tri quan trong:
 - Dong bo ten package `Models` va import `models`
 - Them unit test cho logic tinh diem, GPA va hoc phi
 - Bo sung giao dien va controller
-- Xay dung backend FastAPI hoac chinh sua model de phu hop backend san co
+- Xay dung backend FastAPI hoac chinh sua model de phu hop backend san co 
+
+![alt text](assets/demo.png)
