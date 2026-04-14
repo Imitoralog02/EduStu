@@ -1,164 +1,141 @@
 # EduStu
 
-EduStu la du an quan ly sinh vien theo huong tach lop MVC, hien tai tap trung vao phan `Frontend` va cac model xu ly nghiep vu. Ma nguon dang o giai doan khoi tao cau truc, chua phai ban hoan chinh de chay full app.
+EduStu la ung dung desktop quan ly sinh vien viet bang `PyQt6`, to chuc theo huong `MVC` cho phan frontend. Repo hien tai chua gom backend; frontend giao tiep voi API qua HTTP va mac dinh goi den `http://localhost:8000`.
 
-## Tong quan
+## Chuc nang hien co
 
-Du an huong toi cac chuc nang quan ly hoc vu co ban:
-
-- Dang nhap, dang xuat, doi mat khau
+- Dang nhap
+- Dashboard tong quan
 - Quan ly sinh vien
 - Quan ly hoc phan
-- Dang ky hoc phan
-- Nhap diem, tinh tong ket, quy doi GPA
-- Theo doi hoc phi va cong no
-- Tong hop dashboard va canh bao hoc vu
+- Tra cuu va nhap diem
+- Theo doi hoc phi va ghi nhan thanh toan
+- Xuat bao cao Excel
 
-Diem dang chu y trong code hien tai:
+## Cong nghe
 
-- Cac model uu tien goi API qua `ApiClient`
-- Neu backend chua san sang, model se fallback sang du lieu demo trong bo nho
-- Logic nghiep vu duoc dat trong model, khong day sang view/controller
+- Python 3
+- PyQt6
+- requests
 
-## Trang thai hien tai
-
-Repo hien dang co:
-
-- Thu muc `Frontend/Models` voi cac model nghiep vu chinh
-- Thu muc rong cho `views`, `controllers`, `assets`
-- File cau hinh rong `Frontend/utils/config.py`
-- Moi Git repo, README va `.gitignore`
-
-Repo hien chua co day du:
-
-- File `Frontend/utils/api_client.py`
-- File `Frontend/Models/demo_data.py`
-- Cac controller thuc thi
-- Cac view giao dien
-- Diem vao chay chuong trinh, vi du `main.py`
-- Ma nguon backend trong thu muc `Backend`
-
-Noi cach khac, day la bo khung model va nghiep vu, chua phai ban co the chay giao dien ngay.
-
-## Cau truc thu muc
+## Cau truc repo
 
 ```text
 EduStu/
-|-- Backend/
 |-- Frontend/
-|   |-- Models/
-|   |   |-- auth_models.py
-|   |   |-- student_model.py
-|   |   |-- course_model.py
-|   |   |-- enrollment_model.py
-|   |   |-- grade_model.py
-|   |   |-- tuition_model.py
-|   |   `-- dashboard_model.py
+|   |-- main.py
 |   |-- controllers/
-|   |-- views/
+|   |   |-- auth.py
+|   |   |-- base.py
+|   |   |-- course.py
+|   |   |-- grade.py
+|   |   |-- report.py
+|   |   |-- student.py
+|   |   `-- tuition.py
+|   |-- models/
+|   |   |-- course.py
+|   |   |-- grade.py
+|   |   |-- student.py
+|   |   |-- transcript.py
+|   |   |-- tuition.py
+|   |   `-- user.py
 |   |-- utils/
-|   |   `-- config.py
-|   `-- assets/
-|-- .gitignore
+|   |   |-- config.py
+|   |   |-- helpers.py
+|   |   `-- session.py
+|   `-- views/
+|       |-- base_view.py
+|       |-- course_view.py
+|       |-- dashboard_view.py
+|       |-- grade_view.py
+|       |-- login_view.py
+|       |-- main_window.py
+|       |-- report_view.py
+|       |-- student_view.py
+|       `-- tuition_view.py
+|-- requirements.txt
 `-- README.md
 ```
 
-## Mo ta cac model
+## Kien truc
 
-### `auth_models.py`
+Frontend duoc tach thanh 4 lop chinh:
 
-- Xu ly dang nhap, dang xuat, doi mat khau
-- Uu tien goi API `/auth/...`
-- Neu API loi thi fallback sang `DEMO_ACCOUNTS`
+- `views/`: giao dien PyQt6
+- `controllers/`: validate du lieu, goi API, dieu phoi logic giao dien
+- `models/`: dataclass va logic hien thi/nghiep vu nhe
+- `utils/`: config, helper format, session dang nhap
 
-### `student_model.py`
+`Frontend/main.py` la diem vao cua ung dung. Sau khi dang nhap thanh cong, app mo `MainWindow` va dieu huong sang cac man hinh chuc nang.
 
-- CRUD sinh vien
-- Tim theo MSSV, ho ten, lop, trang thai
-- Ho tro xoa mem qua `soft_delete()`
-- Co ham lay bang diem cua mot sinh vien
+## API frontend dang su dung
 
-### `course_model.py`
+Frontend hien tai ky vong backend co cac endpoint sau:
 
-- CRUD hoc phan
-- Co loc theo hoc ky
-- Khi offline se thao tac tren `_cache`
+- `POST /auth/login`
+- `PUT /auth/password`
+- `GET /sinhvien`
+- `GET /sinhvien/{mssv}`
+- `POST /sinhvien`
+- `PUT /sinhvien/{mssv}`
+- `DELETE /sinhvien/{mssv}`
+- `POST /sinhvien/import`
+- `GET /hocphan`
+- `POST /hocphan`
+- `PUT /hocphan/{ma_hp}`
+- `DELETE /hocphan/{ma_hp}`
+- `GET /dangky/{mssv}`
+- `POST /dangky`
+- `DELETE /dangky/{id}`
+- `GET /diem/{mssv}`
+- `POST /diem`
+- `PUT /diem/{id}`
+- `GET /diem/{mssv}/gpa`
+- `GET /hocphi`
+- `GET /hocphi/conno`
+- `POST /hocphi/thanhtoan`
+- `GET /baocao/dashboard`
+- `GET /baocao/thongke`
+- `GET /baocao/export/excel`
 
-### `enrollment_model.py`
+## Cai dat
 
-- Dang ky, huy dang ky hoc phan theo hoc ky
-- Luu danh sach hoc phan ma sinh vien da dang ky
-
-### `grade_model.py`
-
-- Chua logic nghiep vu tinh diem:
-  - `tinh_tong_ket()`
-  - `xep_loai_diem()`
-  - `quy_doi_sang_gpa4()`
-  - `xep_loai_hoc_luc()`
-- Ho tro luu diem hang loat hoac tung sinh vien
-- Tinh GPA theo tin chi
-
-### `tuition_model.py`
-
-- Theo doi hoc phi theo hoc ky
-- Ghi nhan thanh toan
-- Tinh trang thai:
-  - Da dong
-  - Dong thieu
-  - Chua dong
-- Tong hop tong thu va cong no
-
-### `dashboard_model.py`
-
-- Tong hop so lieu tu sinh vien, hoc phan, diem, hoc phi
-- Lay thong ke dashboard
-- Tao danh sach canh bao hoc vu
-- Lay danh sach sinh vien moi
-
-## Dinh huong kien truc
-
-Code hien tai dang theo y tuong:
-
-- `Models`: nghiep vu va truy cap du lieu
-- `Controllers`: nhan su kien tu giao dien, goi model, xu ly loi
-- `Views`: giao dien PyQt hoac desktop GUI
-- `utils`: cau hinh, API client, helper dung chung
-
-Mot diem can luu y la ten thu muc dang la `Frontend/Models` viet hoa, trong khi nhieu file import theo dang `from models...`. Khi hoan thien du an, ban nen thong nhat ten package de tranh loi import tren moi truong phan biet hoa thuong.
-
-## Moi truong du kien
-
-Tu `Frontend/venv` co the thay du an dang du kien dung:
-
-- Python 3.11
-- PyQt5
-- requests
-- openpyxl
-
-## Cai dat de phat trien tiep
-
-Neu ban muon hoan thien project tu trang thai hien tai, quy trinh hop ly la:
-
-1. Tao virtual environment moi
-2. Cai cac thu vien can thiet
-3. Bo sung `api_client.py`
-4. Bo sung `demo_data.py`
-5. Viet `views/`, `controllers/` va file chay chinh
-6. Neu co backend thi dinh nghia cac API ma model dang goi
-
-Vi du:
+Tao moi truong ao va cai dependency:
 
 ```powershell
-cd Frontend
-python -m venv venv
-.\venv\Scripts\Activate.ps1
-pip install PyQt5 requests openpyxl
+cd C:\Users\admin\EduStu
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
-## Cac API ma frontend dang ky vong
+Neu PowerShell chan script, chay tam:
 
-Cac model hien tai dang tham chieu den nhung endpoint sau:
+```powershell
+Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+```
+
+## Cach chay
+
+Chay frontend:
+
+```powershell
+cd C:\Users\admin\EduStu\Frontend
+python main.py
+```
+
+Hoac neu dang dung virtual environment o root repo:
+
+```powershell
+cd C:\Users\admin\EduStu
+.\.venv\Scripts\python.exe .\Frontend\main.py
+```
+
+## Cau hinh
+
+File cau hinh chinh nam o `Frontend/utils/config.py`.
+
+Gia tri quan trong:
 
 - `POST /auth/login`
 - `POST /auth/logout`
@@ -195,6 +172,3 @@ Cac model hien tai dang tham chieu den nhung endpoint sau:
 - Them unit test cho logic tinh diem, GPA va hoc phi
 - Bo sung giao dien va controller
 - Xay dung backend FastAPI hoac chinh sua model de phu hop backend san co
-![alt text](assets/image.png) 
-![alt text](assets/image2.png)
-![alt text](assets/image1.png)  

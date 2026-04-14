@@ -4,3 +4,5 @@ Frontend/venv/
 .env
 .vscode/
 .idea/
+.venv/
+venv/
