@@ -45,6 +45,7 @@ def list_students(
     search: Optional[str] = None,
     khoa: Optional[str] = None,
     trang_thai: Optional[str] = None,
+    lop: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
     db: Session = Depends(get_db),
@@ -59,6 +60,8 @@ def list_students(
         q = q.filter(Student.khoa == khoa)
     if trang_thai:
         q = q.filter(Student.trang_thai == trang_thai)
+    if lop:
+        q = q.filter(Student.lop.ilike(f"%{lop}%"))
 
     total = q.count()
     items = q.offset((page - 1) * page_size).limit(page_size).all()

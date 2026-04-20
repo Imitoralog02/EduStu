@@ -65,6 +65,24 @@ def get_gpa(mssv: str, db: Session = Depends(get_db), _=Depends(all_roles)):
     return compute_transcript_stats(raw)
 
 
+def _update_canh_bao(db: Session, mssv: str):
+    """Tự động cập nhật trạng thái cảnh báo học vụ dựa trên GPA."""
+    from utils.grade_calc import compute_transcript_stats
+    rows = db.query(Grade, Course).join(Course, Grade.ma_hp == Course.ma_hp).filter(Grade.mssv == mssv).all()
+    raw = [{"so_tin_chi": c.so_tin_chi, "diem_gk": g.diem_gk, "diem_ck": g.diem_ck} for g, c in rows]
+    stats = compute_transcript_stats(raw)
+    gpa = stats.get("gpa")
+    student = db.query(Student).filter(Student.mssv == mssv).first()
+    if not student:
+        return
+    if gpa is not None and gpa < 1.0 and student.trang_thai == "Đang học":
+        student.trang_thai = "Cảnh báo"
+        db.commit()
+    elif gpa is not None and gpa >= 1.0 and student.trang_thai == "Cảnh báo":
+        student.trang_thai = "Đang học"
+        db.commit()
+
+
 @router.post("/diem", response_model=GradeOut, status_code=201)
 def create_grade(body: GradeCreate, db: Session = Depends(get_db), _=Depends(all_roles)):
     existing = db.query(Grade).filter(
@@ -83,6 +101,7 @@ def create_grade(body: GradeCreate, db: Session = Depends(get_db), _=Depends(all
     db.add(grade)
     db.commit()
     db.refresh(grade)
+    _update_canh_bao(db, body.mssv)
     return _grade_to_out(grade, course)
 
 
@@ -99,4 +118,5 @@ def update_grade(
         setattr(grade, field, value)
     db.commit()
     db.refresh(grade)
+    _update_canh_bao(db, grade.mssv)
     return _grade_to_out(grade, course)

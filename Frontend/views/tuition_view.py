@@ -2,7 +2,8 @@ from __future__ import annotations
 from PyQt6.QtWidgets import (
     QHBoxLayout, QVBoxLayout, QLineEdit, QComboBox,
     QPushButton, QLabel, QFrame, QDialog, QGridLayout,
-    QDoubleSpinBox, QMessageBox, QWidget
+    QDoubleSpinBox, QMessageBox, QWidget, QTableWidget,
+    QTableWidgetItem, QHeaderView, QSizePolicy
 )
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
@@ -87,11 +88,16 @@ class TuitionView(BaseView):
             ct_item = self.cell(t.con_thieu_display, color=DANGER if t.con_thieu > 0 else None)
             self.table.setItem(row, 4, ct_item)
             self.table.setItem(row, 5, self.badge_cell(t.trang_thai))
+            w = QWidget(); hl = QHBoxLayout(w); hl.setContentsMargins(4,2,4,2); hl.setSpacing(4)
             b = QPushButton("Thanh toán")
             b.setFixedHeight(26); b.setCursor(Qt.CursorShape.PointingHandCursor)
             b.setStyleSheet(f"QPushButton{{background:transparent;color:{ACCENT};border:1px solid {ACCENT};border-radius:4px;font-size:11px;padding:0 8px;}}QPushButton:hover{{background:{ACCENT};color:white;}}")
             b.clicked.connect(lambda _, obj=t: PaymentForm(mssv=obj.mssv, con_thieu=obj.con_thieu, on_save=self.refresh).exec())
-            w = QWidget(); hl = QHBoxLayout(w); hl.setContentsMargins(4,2,4,2); hl.addWidget(b)
+            bh = QPushButton("Lịch sử")
+            bh.setFixedHeight(26); bh.setCursor(Qt.CursorShape.PointingHandCursor)
+            bh.setStyleSheet(f"QPushButton{{background:transparent;color:{SUCCESS};border:1px solid {SUCCESS};border-radius:4px;font-size:11px;padding:0 8px;}}QPushButton:hover{{background:{SUCCESS};color:white;}}")
+            bh.clicked.connect(lambda _, obj=t: PaymentHistoryDialog(mssv=obj.mssv, ho_ten=obj.ho_ten).exec())
+            hl.addWidget(b); hl.addWidget(bh)
             self.table.setCellWidget(row, 6, w)
 
     def _render_stats(self, items):
@@ -157,3 +163,85 @@ class PaymentForm(QDialog):
             self.f_pt.currentText(), self.f_gc.text(),
             on_success=ok, on_error=err,
         )
+
+
+class PaymentHistoryDialog(QDialog):
+    def __init__(self, mssv: str, ho_ten: str):
+        super().__init__()
+        self._ctrl = TuitionController()
+        self.setWindowTitle(f"Lịch sử thanh toán — {ho_ten}")
+        self.setMinimumSize(620, 400)
+        self.setStyleSheet(f"background:{PRIMARY};color:{TEXT_LIGHT};")
+        self._build(mssv, ho_ten)
+        self._load(mssv)
+
+    def _build(self, mssv, ho_ten):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(20, 16, 20, 16); root.setSpacing(12)
+
+        title = QLabel(f"Lịch sử thanh toán học phí")
+        title.setFont(QFont("Roboto", 14, QFont.Weight.Bold))
+        sub = QLabel(f"{ho_ten}  |  MSSV: {mssv}")
+        sub.setStyleSheet(f"color:{TEXT_MUTED};font-size:12px;")
+        root.addWidget(title); root.addWidget(sub)
+
+        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color:{BORDER};"); root.addWidget(sep)
+
+        self.table = QTableWidget()
+        self.table.setColumnCount(5)
+        self.table.setHorizontalHeaderLabels(["Ngày nộp", "Số tiền", "Phương thức", "Ghi chú", ""])
+        self.table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.Stretch)
+        self.table.horizontalHeader().setStyleSheet(f"background:{SECONDARY};color:{TEXT_MUTED};font-size:12px;border:none;")
+        self.table.setStyleSheet(f"""
+            QTableWidget{{background:{PRIMARY};border:1px solid {BORDER};border-radius:8px;gridline-color:{BORDER};}}
+            QTableWidget::item{{padding:6px 10px;color:{TEXT_LIGHT};border:none;}}
+            QTableWidget::item:selected{{background:#1E3A5F;}}
+        """)
+        self.table.setAlternatingRowColors(True)
+        self.table.verticalHeader().setVisible(False)
+        self.table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.table.setColumnWidth(0, 150); self.table.setColumnWidth(1, 130)
+        self.table.setColumnWidth(2, 130); self.table.setColumnWidth(4, 40)
+        root.addWidget(self.table)
+
+        self.lbl_tong = QLabel("Tổng đã nộp: —")
+        self.lbl_tong.setStyleSheet(f"color:{SUCCESS};font-size:13px;font-weight:700;")
+        self.lbl_tong.setAlignment(Qt.AlignmentFlag.AlignRight)
+        root.addWidget(self.lbl_tong)
+
+        btn_close = QPushButton("Đóng"); btn_close.setFixedHeight(34)
+        btn_close.setStyleSheet(f"QPushButton{{background:transparent;color:{TEXT_MUTED};border:1px solid {BORDER};border-radius:6px;padding:0 20px;}}QPushButton:hover{{color:{TEXT_LIGHT};}}")
+        btn_close.clicked.connect(self.accept)
+        hr = QHBoxLayout(); hr.addStretch(); hr.addWidget(btn_close)
+        root.addLayout(hr)
+
+    def _load(self, mssv):
+        def ok(data):
+            self.table.setRowCount(len(data))
+            tong = 0.0
+            for row, item in enumerate(data):
+                ngay = (item.get("ngay_nop") or "")[:19]
+                so_tien = item.get("so_tien", 0)
+                tong += so_tien
+                for col, val in enumerate([
+                    ngay, fmt_money(so_tien),
+                    item.get("phuong_thuc", ""), item.get("ghi_chu", "") or "",
+                ]):
+                    cell = QTableWidgetItem(str(val))
+                    cell.setTextAlignment(Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft)
+                    self.table.setItem(row, col, cell)
+            self.lbl_tong.setText(f"Tổng đã nộp: {fmt_money(tong)}")
+            if not data:
+                self.table.setRowCount(1)
+                item = QTableWidgetItem("Chưa có lịch sử thanh toán")
+                item.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+                item.setForeground(__import__("PyQt6.QtGui", fromlist=["QColor"]).QColor(TEXT_MUTED))
+                self.table.setSpan(0, 0, 1, 5)
+                self.table.setItem(0, 0, item)
+
+        def err(msg):
+            QMessageBox.warning(self, "Lỗi", msg)
+
+        self._ctrl.load_payment_history(mssv, on_success=ok, on_error=err)

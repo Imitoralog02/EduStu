@@ -35,6 +35,10 @@ class TuitionService(APIClient):
         """GET /hocphi/conno"""
         return self.get("/hocphi/conno")
 
+    def get_payment_history(self, mssv: str) -> list:
+        """GET /hocphi/lichsu/{mssv}"""
+        return self.get(f"/hocphi/lichsu/{mssv}")
+
 
 # ======================================================================
 # TuitionController
@@ -62,6 +66,10 @@ class TuitionController:
             return [Tuition.from_dict(t) for t in raw]
 
         self._run(_do, on_success, on_error)
+
+    def load_payment_history(self, mssv: str, on_success=None, on_error=None) -> None:
+        """Lấy lịch sử thanh toán của sinh viên."""
+        self._run(lambda: self._svc.get_payment_history(mssv), on_success, on_error)
 
     def load_debt_list(self, on_success=None, on_error=None) -> None:
         """

@@ -51,7 +51,15 @@ class StudentView(BaseView):
         self.cmb_khoa.currentIndexChanged.connect(self._load)
         self.cmb_tt.currentIndexChanged.connect(self._load)
 
+        self.inp_lop = QLineEdit()
+        self.inp_lop.setPlaceholderText("Lọc theo lớp...")
+        self.inp_lop.setFixedHeight(34)
+        self.inp_lop.setFixedWidth(130)
+        self.inp_lop.setStyleSheet(QSS_INPUT)
+        self.inp_lop.textChanged.connect(lambda: self._timer.start(400))
+
         tb.addWidget(self.inp_search, stretch=1)
+        tb.addWidget(self.inp_lop)
         tb.addWidget(self.cmb_khoa)
         tb.addWidget(self.cmb_tt)
         self._root.addLayout(tb)
@@ -77,8 +85,9 @@ class StudentView(BaseView):
         search = self.inp_search.text().strip()
         khoa   = self.cmb_khoa.currentText() if self.cmb_khoa.currentIndex() > 0 else ""
         tt     = self.cmb_tt.currentText()   if self.cmb_tt.currentIndex()   > 0 else ""
+        lop    = self.inp_lop.text().strip() if hasattr(self, "inp_lop") else ""
         self.run_async(
-            lambda: self._ctrl._svc.get_list(search, khoa, tt),
+            lambda: self._ctrl._svc.get_list(search, khoa, tt, lop),
             self._render,
         )
 
@@ -174,7 +183,7 @@ class StudentForm(QDialog):
         self._ctrl    = StudentController()
         self._is_edit = bool(data)
         self.setWindowTitle("Sửa sinh viên" if self._is_edit else "Thêm sinh viên")
-        self.setFixedSize(520, 660)
+        self.setFixedSize(520, 780)
         self.setStyleSheet("background:#FFFFFF; color:#1E293B; font-family:Roboto;")
         self._build()
         if data:
@@ -217,22 +226,25 @@ class StudentForm(QDialog):
             c.setStyleSheet(QSS_INPUT_LIGHT)
             return c
 
-        self.f_mssv    = inp("VD: SV001")
-        self.f_hoten   = inp("Nguyễn Văn A")
-        self.f_email   = inp("sv@abc.edu.vn")
-        self.f_sdt     = inp("0901234567")
-        self.f_lop     = inp("CNTT-K67")
-        self.f_diachi  = inp("Số nhà, đường, phường/xã, tỉnh/thành")
-        self.f_quequan = inp("Tỉnh / thành phố quê quán")
-        self.f_cccd    = inp("12 số CCCD / 9 số CMND")
-        self.f_ns      = QDateEdit()
+        self.f_mssv      = inp("VD: SV001")
+        self.f_hoten     = inp("Nguyễn Văn A")
+        self.f_email     = inp("sv@abc.edu.vn")
+        self.f_sdt       = inp("0901234567")
+        self.f_lop       = inp("CNTT-K67")
+        self.f_diachi    = inp("Số nhà, đường, phường/xã, tỉnh/thành")
+        self.f_ns        = QDateEdit()
         self.f_ns.setCalendarPopup(True)
         self.f_ns.setDate(QDate(2003, 1, 1))
         self.f_ns.setFixedHeight(34)
         self.f_ns.setStyleSheet(QSS_INPUT_LIGHT)
-        self.f_gt   = cmb(GIOI_TINH)
-        self.f_khoa = cmb(KHOA_LIST)
-        self.f_tt   = cmb(TRANG_THAI_SV)
+        self.f_gt        = cmb(GIOI_TINH)
+        self.f_khoa      = cmb(KHOA_LIST)
+        self.f_tt        = cmb(TRANG_THAI_SV)
+        self.f_nam_nhap  = inp("VD: 2022")
+        self.f_doi_tuong = inp("VD: Hộ nghèo, Dân tộc thiểu số...")
+        self.f_cha       = inp("Họ tên cha")
+        self.f_me        = inp("Họ tên mẹ")
+        self.f_sdt_ph    = inp("Số điện thoại phụ huynh")
 
         rows = [
             ("Mã sinh viên *", self.f_mssv),
@@ -243,9 +255,12 @@ class StudentForm(QDialog):
             ("Số điện thoại",  self.f_sdt),
             ("Khoa *",         self.f_khoa),
             ("Lớp *",          self.f_lop),
-            ("Quê quán",       self.f_quequan),
             ("Nơi ở hiện tại", self.f_diachi),
-            ("Số CCCD/CMND",   self.f_cccd),
+            ("Năm nhập học",   self.f_nam_nhap),
+            ("Đối tượng ưu tiên", self.f_doi_tuong),
+            ("Họ tên cha",     self.f_cha),
+            ("Họ tên mẹ",      self.f_me),
+            ("SĐT phụ huynh",  self.f_sdt_ph),
             ("Trạng thái",     self.f_tt),
         ]
         for i, (l, w) in enumerate(rows):
@@ -292,11 +307,14 @@ class StudentForm(QDialog):
         self.f_mssv.setReadOnly(True)
         self.f_hoten.setText(d.get("ho_ten", ""))
         self.f_email.setText(d.get("email", ""))
-        self.f_sdt.setText(d.get("sdt", d.get("so_dien_thoai", "")))
+        self.f_sdt.setText(d.get("so_dien_thoai", ""))
         self.f_lop.setText(d.get("lop", ""))
         self.f_diachi.setText(d.get("dia_chi", ""))
-        self.f_quequan.setText(d.get("que_quan", ""))
-        self.f_cccd.setText(d.get("cccd", ""))
+        self.f_nam_nhap.setText(str(d.get("nam_nhap_hoc", "") or ""))
+        self.f_doi_tuong.setText(d.get("doi_tuong", "") or "")
+        self.f_cha.setText(d.get("ho_ten_cha", "") or "")
+        self.f_me.setText(d.get("ho_ten_me", "") or "")
+        self.f_sdt_ph.setText(d.get("sdt_phu_huynh", "") or "")
         ns = d.get("ngay_sinh", "")
         if ns:
             self.f_ns.setDate(QDate.fromString(ns[:10], "yyyy-MM-dd"))
@@ -306,19 +324,23 @@ class StudentForm(QDialog):
                 cmb.setCurrentIndex(idx)
 
     def _collect(self) -> dict:
+        nam = self.f_nam_nhap.text().strip()
         return {
-            "mssv":          self.f_mssv.text().strip(),
-            "ho_ten":        self.f_hoten.text().strip(),
-            "ngay_sinh":     self.f_ns.date().toString("yyyy-MM-dd"),
-            "gioi_tinh":     self.f_gt.currentText(),
-            "email":         self.f_email.text().strip(),
-            "so_dien_thoai": self.f_sdt.text().strip(),
-            "khoa":          self.f_khoa.currentText(),
-            "lop":           self.f_lop.text().strip(),
-            "dia_chi":       self.f_diachi.text().strip(),
-            "que_quan":      self.f_quequan.text().strip(),
-            "cccd":          self.f_cccd.text().strip(),
-            "trang_thai":    self.f_tt.currentText(),
+            "mssv":           self.f_mssv.text().strip(),
+            "ho_ten":         self.f_hoten.text().strip(),
+            "ngay_sinh":      self.f_ns.date().toString("yyyy-MM-dd"),
+            "gioi_tinh":      self.f_gt.currentText(),
+            "email":          self.f_email.text().strip(),
+            "so_dien_thoai":  self.f_sdt.text().strip(),
+            "khoa":           self.f_khoa.currentText(),
+            "lop":            self.f_lop.text().strip(),
+            "dia_chi":        self.f_diachi.text().strip(),
+            "trang_thai":     self.f_tt.currentText(),
+            "nam_nhap_hoc":   int(nam) if nam.isdigit() else None,
+            "doi_tuong":      self.f_doi_tuong.text().strip() or None,
+            "ho_ten_cha":     self.f_cha.text().strip() or None,
+            "ho_ten_me":      self.f_me.text().strip() or None,
+            "sdt_phu_huynh":  self.f_sdt_ph.text().strip() or None,
         }
 
     def _save(self):
@@ -427,41 +449,43 @@ class StudentProfileDialog(QDialog):
         # Nhóm thông tin cơ bản
         self._section(bl, "Thông tin cơ bản")
         rows_basic = [
-            ("Mã sinh viên",   d.get("mssv", "—")),
-            ("Họ và tên",      d.get("ho_ten", "—")),
-            ("Ngày sinh",      fmt_date(d.get("ngay_sinh", ""))),
-            ("Giới tính",      d.get("gioi_tinh", "—")),
-            ("Khoa",           d.get("khoa", "—")),
-            ("Lớp",            d.get("lop", "—")),
+            ("Mã sinh viên",     d.get("mssv", "—")),
+            ("Họ và tên",        d.get("ho_ten", "—")),
+            ("Ngày sinh",        fmt_date(d.get("ngay_sinh", ""))),
+            ("Giới tính",        d.get("gioi_tinh", "—")),
+            ("Khoa",             d.get("khoa", "—")),
+            ("Lớp",              d.get("lop", "—")),
+            ("Năm nhập học",     str(d.get("nam_nhap_hoc", "") or "—")),
+            ("Đối tượng ưu tiên", d.get("doi_tuong", "") or "—"),
         ]
         for label, value in rows_basic:
             self._info_row(bl, label, value)
 
-        sep = QFrame()
-        sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet(f"color:{BORDER};margin:12px 0;")
-        bl.addWidget(sep)
+        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color:{BORDER};margin:12px 0;"); bl.addWidget(sep)
 
         # Nhóm liên lạc & cá nhân
         self._section(bl, "Liên lạc & Cư trú")
         rows_contact = [
-            ("Số điện thoại",  d.get("so_dien_thoai", d.get("sdt", "—"))),
+            ("Số điện thoại",  d.get("so_dien_thoai", "—")),
             ("Email",          d.get("email", "—")),
-            ("Quê quán",       d.get("que_quan", "—") or "—"),
-            ("Nơi ở hiện tại", d.get("dia_chi", "—") or "—"),
+            ("Nơi ở hiện tại", d.get("dia_chi", "") or "—"),
         ]
         for label, value in rows_contact:
             self._info_row(bl, label, value)
 
-        sep2 = QFrame()
-        sep2.setFrameShape(QFrame.Shape.HLine)
-        sep2.setStyleSheet(f"color:{BORDER};margin:12px 0;")
-        bl.addWidget(sep2)
+        sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
+        sep2.setStyleSheet(f"color:{BORDER};margin:12px 0;"); bl.addWidget(sep2)
 
-        # Nhóm giấy tờ
-        self._section(bl, "Giấy tờ tùy thân")
-        cccd_val = d.get("cccd", "") or "—"
-        self._info_row(bl, "Số CCCD / CMND", cccd_val)
+        # Nhóm gia đình
+        self._section(bl, "Thông tin gia đình")
+        rows_family = [
+            ("Họ tên cha",     d.get("ho_ten_cha", "") or "—"),
+            ("Họ tên mẹ",      d.get("ho_ten_me", "") or "—"),
+            ("SĐT phụ huynh",  d.get("sdt_phu_huynh", "") or "—"),
+        ]
+        for label, value in rows_family:
+            self._info_row(bl, label, value)
 
         bl.addStretch()
         root.addWidget(body)

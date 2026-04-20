@@ -9,12 +9,12 @@ from utils.session import Session
 from utils.config import PRIMARY, SECONDARY, ACCENT, HIGHLIGHT, TEXT_LIGHT, TEXT_MUTED, BORDER
 
 NAV_ITEMS = [
-    ("dashboard", "  Dashboard",   "admin phong_dao_tao giang_vien"),
-    ("sinhvien",  "  Sinh viên",   "admin phong_dao_tao"),
-    ("hocphan",   "  Học phần",    "admin phong_dao_tao giang_vien"),
-    ("diem",      "  Điểm số",     "admin phong_dao_tao giang_vien"),
-    ("hocphi",    "  Học phí",     "admin phong_dao_tao"),
-    ("baocao",    "  Báo cáo",     "admin phong_dao_tao"),
+    ("dashboard", "  Dashboard",   "admin phongdt giaovien"),
+    ("sinhvien",  "  Sinh viên",   "admin phongdt"),
+    ("hocphan",   "  Học phần",    "admin phongdt giaovien"),
+    ("diem",      "  Điểm số",     "admin phongdt giaovien"),
+    ("hocphi",    "  Học phí",     "admin phongdt"),
+    ("baocao",    "  Báo cáo",     "admin phongdt"),
 ]
 
 

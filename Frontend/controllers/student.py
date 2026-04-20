@@ -15,6 +15,7 @@ class StudentService(APIClient):
         search:     str = "",
         khoa:       str = "",
         trang_thai: str = "",
+        lop:        str = "",
         page:       int = 1,
         page_size:  int = 20,
     ) -> dict:
@@ -23,6 +24,7 @@ class StudentService(APIClient):
             "search":     search,
             "khoa":       khoa,
             "trang_thai": trang_thai,
+            "lop":        lop,
             "page":       page,
             "page_size":  page_size,
         })

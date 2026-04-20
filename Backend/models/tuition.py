@@ -6,12 +6,14 @@ from database import Base
 class Tuition(Base):
     __tablename__ = "tuition"
 
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    mssv = Column(String(20), ForeignKey("students.mssv", ondelete="CASCADE"), unique=True, nullable=False)
-    phai_nop = Column(Float, default=0.0)
-    da_nop = Column(Float, default=0.0)
-    han_nop = Column(Date, nullable=True)
-    ghi_chu = Column(Text, nullable=True)
+    id              = Column(Integer, primary_key=True, autoincrement=True)
+    mssv            = Column(String(20), ForeignKey("students.mssv", ondelete="CASCADE"), unique=True, nullable=False)
+    phai_nop        = Column(Float, default=0.0)
+    mien_giam       = Column(Float, default=0.0)
+    ly_do_mien_giam = Column(Text, nullable=True)
+    da_nop          = Column(Float, default=0.0)
+    han_nop         = Column(Date, nullable=True)
+    ghi_chu         = Column(Text, nullable=True)
 
     student = relationship("Student", back_populates="tuition")
     payment_logs = relationship("PaymentLog", back_populates="tuition_record", cascade="all, delete-orphan")

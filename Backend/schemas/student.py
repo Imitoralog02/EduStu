@@ -21,6 +21,11 @@ class StudentBase(BaseModel):
     so_dien_thoai: Optional[str] = None
     dia_chi: Optional[str] = None
     trang_thai: TrangThaiEnum = TrangThaiEnum.dang_hoc
+    nam_nhap_hoc: Optional[int] = None
+    doi_tuong: Optional[str] = None
+    ho_ten_cha: Optional[str] = None
+    ho_ten_me: Optional[str] = None
+    sdt_phu_huynh: Optional[str] = None
 
     @field_validator("email")
     @classmethod

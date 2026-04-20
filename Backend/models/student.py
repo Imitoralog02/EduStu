@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Date, Enum
+from sqlalchemy import Column, String, Date, Enum, Integer
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -20,6 +20,12 @@ class Student(Base):
         default="Đang học",
         nullable=False,
     )
+    # Thông tin hồ sơ mở rộng
+    nam_nhap_hoc = Column(Integer, nullable=True)
+    doi_tuong = Column(String(100), nullable=True)   # Đối tượng ưu tiên
+    ho_ten_cha = Column(String(100), nullable=True)
+    ho_ten_me = Column(String(100), nullable=True)
+    sdt_phu_huynh = Column(String(20), nullable=True)
 
     enrollments = relationship("Enrollment", back_populates="student", cascade="all, delete-orphan")
     grades = relationship("Grade", back_populates="student", cascade="all, delete-orphan")
