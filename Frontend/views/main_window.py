@@ -30,7 +30,7 @@ class MainWindow(QMainWindow):
             }}
             QWidget {{
                 color: {TEXT_LIGHT};
-                font-family: Roboto;
+                font-family: Arial;
             }}
         """)
         self._build()
@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
         root.addWidget(self._make_sidebar())
 
         self.stack = QStackedWidget()
-        self.stack.setStyleSheet("background: transparent; font-family: Roboto;")
+        self.stack.setStyleSheet("background: transparent; font-family: Arial;")
         root.addWidget(self.stack)
 
     def _make_sidebar(self) -> QFrame:
@@ -57,7 +57,7 @@ class MainWindow(QMainWindow):
             QFrame {{
                 background: {SECONDARY};
                 border-right: 1px solid {BORDER};
-                font-family: Roboto;
+                font-family: Arial;
             }}
         """)
         layout = QVBoxLayout(sb)
@@ -71,7 +71,7 @@ class MainWindow(QMainWindow):
         bl = QHBoxLayout(brand)
         bl.setContentsMargins(16, 0, 16, 0)
         lbl = QLabel("EduStu")
-        lbl.setFont(QFont("Roboto", 18, QFont.Weight.Bold))
+        lbl.setFont(QFont("Arial", 18, QFont.Weight.Bold))
         lbl.setStyleSheet("color: #93C5FD; border: none; letter-spacing: 2px;")
         bl.addWidget(lbl)
         layout.addWidget(brand)
@@ -108,18 +108,18 @@ class MainWindow(QMainWindow):
             border-radius: 19px;
             font-weight: 700;
             font-size: 15px;
-            font-family: Roboto;
+            font-family: Arial;
             border: 1px solid rgba(37,99,235,0.4);
         """)
         name_lbl = QLabel(user.ho_ten if user else "")
-        name_lbl.setStyleSheet(f"font-size: 13px; font-weight: 600; color: {TEXT_LIGHT}; border: none; font-family: Roboto;")
+        name_lbl.setStyleSheet(f"font-size: 13px; font-weight: 600; color: {TEXT_LIGHT}; border: none; font-family: Arial;")
         name_lbl.setWordWrap(True)
         av_row.addWidget(av)
         av_row.addWidget(name_lbl, stretch=1)
         ul.addLayout(av_row)
 
         role_lbl = QLabel(user.role_label if user else "")
-        role_lbl.setStyleSheet(f"font-size: 12px; color: {TEXT_MUTED}; border: none; padding-left: 2px; font-family: Roboto;")
+        role_lbl.setStyleSheet(f"font-size: 12px; color: {TEXT_MUTED}; border: none; padding-left: 2px; font-family: Arial;")
         ul.addWidget(role_lbl)
 
         btn_logout = QPushButton("Đăng xuất")
@@ -132,7 +132,7 @@ class MainWindow(QMainWindow):
                 border: 1px solid rgba(239,68,68,0.3);
                 border-radius: 7px;
                 font-size: 13px;
-                font-family: Roboto;
+                font-family: Arial;
                 margin-top: 4px;
             }}
             QPushButton:hover {{ background: #EF4444; color: white; border-color: #EF4444; }}
@@ -155,7 +155,7 @@ class MainWindow(QMainWindow):
                 border-left: 3px solid transparent;
                 background: transparent;
                 font-size: 14px;
-                font-family: Roboto;
+                font-family: Arial;
                 color: {TEXT_MUTED};
             }}
             QPushButton:hover {{
@@ -174,32 +174,34 @@ class MainWindow(QMainWindow):
         return btn
 
     def _load_views(self):
-        from views.dashboard_view import DashboardView
-        from views.student_view   import StudentView
-        from views.course_view    import CourseView
-        from views.grade_view     import GradeView
-        from views.tuition_view   import TuitionView
-        from views.report_view    import ReportView
-
-        self._views: dict[str, QWidget] = {
-            "dashboard": DashboardView(),
-            "sinhvien":  StudentView(),
-            "hocphan":   CourseView(),
-            "diem":      GradeView(),
-            "hocphi":    TuitionView(),
-            "baocao":    ReportView(),
+        self._views: dict[str, QWidget] = {}
+        self._view_factories = {
+            "dashboard": lambda: __import__("views.dashboard_view", fromlist=["DashboardView"]).DashboardView(),
+            "sinhvien":  lambda: __import__("views.student_view",   fromlist=["StudentView"]).StudentView(),
+            "hocphan":   lambda: __import__("views.course_view",    fromlist=["CourseView"]).CourseView(),
+            "diem":      lambda: __import__("views.grade_view",     fromlist=["GradeView"]).GradeView(),
+            "hocphi":    lambda: __import__("views.tuition_view",   fromlist=["TuitionView"]).TuitionView(),
+            "baocao":    lambda: __import__("views.report_view",    fromlist=["ReportView"]).ReportView(),
         }
-        for v in self._views.values():
-            self.stack.addWidget(v)
 
     def _nav_to(self, key: str):
         for k, btn in self._nav_btns.items():
             btn.setChecked(k == key)
+
+        # Tạo view lần đầu khi navigate đến (lazy init)
+        if key not in self._views and key in self._view_factories:
+            view = self._view_factories[key]()
+            self._views[key] = view
+            self.stack.addWidget(view)
+
         if key in self._views:
-            self.stack.setCurrentWidget(self._views[key])
             view = self._views[key]
-            if hasattr(view, "refresh"):
-                view.refresh()
+            self.stack.setCurrentWidget(view)
+            # Chỉ refresh lần đầu (view mới tạo chưa có _loaded)
+            if not getattr(view, "_loaded", False):
+                if hasattr(view, "refresh"):
+                    view.refresh()
+                view._loaded = True
 
     def _logout(self):
         reply = QMessageBox.question(

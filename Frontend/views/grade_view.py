@@ -126,7 +126,7 @@ class GradeView(BaseView):
         )
 
         self.p_name = QLabel("—")
-        self.p_name.setFont(QFont("Roboto", 13, QFont.Weight.Bold))
+        self.p_name.setFont(QFont("Arial", 13, QFont.Weight.Bold))
         self.p_name.setStyleSheet(f"color:{TEXT_LIGHT};border:none;")
         self.p_name.setWordWrap(True)
         self.p_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -348,7 +348,7 @@ class GradeForm(QDialog):
         root.setSpacing(12)
 
         title = QLabel(f"Nhập điểm cho: {self._mssv}")
-        title.setFont(QFont("Roboto", 13, QFont.Weight.Bold))
+        title.setFont(QFont("Arial", 13, QFont.Weight.Bold))
         root.addWidget(title)
 
         sep = QFrame()
@@ -491,7 +491,7 @@ class GradeEditForm(QDialog):
         root.setSpacing(12)
 
         title = QLabel(f"Sửa điểm học phần: {ma_hp}")
-        title.setFont(QFont("Roboto", 13, QFont.Weight.Bold))
+        title.setFont(QFont("Arial", 13, QFont.Weight.Bold))
         title.setStyleSheet(f"color:{TEXT_LIGHT};")
         root.addWidget(title)
 
@@ -614,7 +614,7 @@ class GpaDetailDialog(QDialog):
 
         # Tiêu đề
         title = QLabel(f"GPA chi tiết: {ho_ten}")
-        title.setFont(QFont("Roboto", 14, QFont.Weight.Bold))
+        title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         title.setStyleSheet(f"color:{TEXT_LIGHT};")
         root.addWidget(title)
 
@@ -636,7 +636,7 @@ class GpaDetailDialog(QDialog):
             lbl = QLabel(lbl_txt)
             lbl.setStyleSheet(f"color:{TEXT_MUTED};font-size:11px;border:none;")
             val = QLabel("...")
-            val.setFont(QFont("Roboto", 18, QFont.Weight.Bold))
+            val.setFont(QFont("Arial", 18, QFont.Weight.Bold))
             val.setStyleSheet(f"color:{clr};border:none;")
             cl.addWidget(lbl)
             cl.addWidget(val)
@@ -651,7 +651,7 @@ class GpaDetailDialog(QDialog):
 
         # Bảng GPA từng học kỳ
         lbl_tbl = QLabel("GPA từng học kỳ")
-        lbl_tbl.setFont(QFont("Roboto", 12, QFont.Weight.Bold))
+        lbl_tbl.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         lbl_tbl.setStyleSheet(f"color:{TEXT_LIGHT};")
         root.addWidget(lbl_tbl)
 

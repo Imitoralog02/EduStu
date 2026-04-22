@@ -209,17 +209,18 @@ INSERT INTO tuition (mssv, phai_nop, da_nop, han_nop, ghi_chu) VALUES
 
 -- ── Cập nhật cấu trúc bảng (chạy nếu đã có DB cũ) ───────────
 -- Thêm cột mở rộng hồ sơ sinh viên
-ALTER TABLE students
-    ADD COLUMN IF NOT EXISTS nam_nhap_hoc    INT          DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS doi_tuong       VARCHAR(100) DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS ho_ten_cha      VARCHAR(100) DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS ho_ten_me       VARCHAR(100) DEFAULT NULL,
-    ADD COLUMN IF NOT EXISTS sdt_phu_huynh   VARCHAR(20)  DEFAULT NULL;
-
--- Thêm cột miễn giảm học phí
+-- Thêm cột thiếu vào bảng tuition
 ALTER TABLE tuition
-    ADD COLUMN IF NOT EXISTS mien_giam       FLOAT DEFAULT 0.0,
-    ADD COLUMN IF NOT EXISTS ly_do_mien_giam TEXT  DEFAULT NULL;
+  ADD COLUMN mien_giam FLOAT DEFAULT 0.0,
+  ADD COLUMN ly_do_mien_giam TEXT NULL;
+
+-- Thêm cột thiếu vào bảng students
+ALTER TABLE students
+  ADD COLUMN nam_nhap_hoc INT NULL,
+  ADD COLUMN doi_tuong VARCHAR(100) NULL,
+  ADD COLUMN ho_ten_cha VARCHAR(100) NULL,
+  ADD COLUMN ho_ten_me VARCHAR(100) NULL,
+  ADD COLUMN sdt_phu_huynh VARCHAR(20) NULL;
 
 -- ── Lịch sử thanh toán ────────────────────────────────────────
 INSERT INTO payment_logs (tuition_id, mssv, so_tien, phuong_thuc, ghi_chu) VALUES

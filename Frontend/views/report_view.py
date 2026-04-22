@@ -29,8 +29,8 @@ class ReportView(BaseView):
     def build_ui(self):
         # Export cards
         exp_lbl = QLabel("Xuất file báo cáo")
-        exp_lbl.setFont(QFont("Roboto", 15, QFont.Weight.Bold))
-        exp_lbl.setStyleSheet(f"color:{TEXT_LIGHT};font-family:Roboto;background:transparent;")
+        exp_lbl.setFont(QFont("Arial", 15, QFont.Weight.Bold))
+        exp_lbl.setStyleSheet(f"color:{TEXT_LIGHT};font-family:Arial;background:transparent;")
         self._root.addWidget(exp_lbl)
 
         exp_row = QHBoxLayout(); exp_row.setSpacing(12)
@@ -40,8 +40,8 @@ class ReportView(BaseView):
 
         # Statistics table
         stat_lbl = QLabel("Thống kê theo khoa")
-        stat_lbl.setFont(QFont("Roboto", 15, QFont.Weight.Bold))
-        stat_lbl.setStyleSheet(f"color:{TEXT_LIGHT};font-family:Roboto;background:transparent;")
+        stat_lbl.setFont(QFont("Arial", 15, QFont.Weight.Bold))
+        stat_lbl.setStyleSheet(f"color:{TEXT_LIGHT};font-family:Arial;background:transparent;")
         self._root.addWidget(stat_lbl)
 
         self.table = self.make_table(COLS_TK)
@@ -85,11 +85,11 @@ class ReportView(BaseView):
         layout.setSpacing(6)
 
         lbl_t = QLabel(title)
-        lbl_t.setFont(QFont("Roboto", 14, QFont.Weight.Bold))
+        lbl_t.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         lbl_t.setStyleSheet("color:#0F172A;border:none;")
 
         lbl_d = QLabel(desc)
-        lbl_d.setStyleSheet("color:#64748B;font-size:13px;font-family:Roboto;border:none;")
+        lbl_d.setStyleSheet("color:#64748B;font-size:13px;font-family:Arial;border:none;")
 
         btn = QPushButton("Xuất Excel")
         btn.setFixedHeight(36)
@@ -99,7 +99,7 @@ class ReportView(BaseView):
                 background: {clr};
                 color: white; border: none;
                 border-radius: 9px;
-                font-size: 13px; font-weight: 600; font-family: Roboto;
+                font-size: 13px; font-weight: 600; font-family: Arial;
             }}
             QPushButton:hover {{ background: {clr}CC; }}
         """)

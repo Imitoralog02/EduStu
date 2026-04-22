@@ -118,7 +118,7 @@ class EnrollmentView(BaseView):
         )
 
         self.p_name = QLabel("Chưa chọn sinh viên")
-        self.p_name.setFont(QFont("Roboto", 12, QFont.Weight.Bold))
+        self.p_name.setFont(QFont("Arial", 12, QFont.Weight.Bold))
         self.p_name.setStyleSheet(f"color:{TEXT_LIGHT};border:none;")
         self.p_name.setWordWrap(True)
         self.p_name.setAlignment(Qt.AlignmentFlag.AlignCenter)
@@ -278,7 +278,7 @@ class EnrollForm(QDialog):
         root.setSpacing(14)
 
         title = QLabel(f"Đăng ký học phần cho: {self._mssv}")
-        title.setFont(QFont("Roboto", 13, QFont.Weight.Bold))
+        title.setFont(QFont("Arial", 13, QFont.Weight.Bold))
         title.setStyleSheet(f"color:{TEXT_LIGHT};")
         root.addWidget(title)
 

@@ -4,9 +4,9 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QMessageBox, QFrame,
-    QGraphicsDropShadowEffect
+    QGraphicsDropShadowEffect, QSizePolicy
 )
-from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF
+from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QSize
 from PyQt6.QtGui import QFont, QColor, QPainter, QLinearGradient, QBrush, QRadialGradient, QPen
 from utils.config import (
     PRIMARY, SECONDARY, ACCENT, TEXT_LIGHT, TEXT_MUTED,
@@ -62,6 +62,8 @@ class AnimatedBackground(QWidget):
             self._particles = [_Particle(w, h) for _ in range(55)]
 
     def _tick(self):
+        if not self.isVisible():
+            return
         self._t += 0.8
         for pt in self._particles:
             pt.update()
@@ -139,7 +141,7 @@ QTableWidget {
     border-radius: 0px;
     color: #1E293B;
     font-size: 14px;
-    font-family: Roboto;
+    font-family: Arial;
     outline: none;
     gridline-color: #F1F5F9;
 }
@@ -160,7 +162,7 @@ QHeaderView::section {
     color: #475569;
     font-size: 12px;
     font-weight: 700;
-    font-family: Roboto;
+    font-family: Arial;
     padding: 10px 12px;
     border: none;
     border-bottom: 2px solid #E2E8F0;
@@ -192,7 +194,7 @@ QPushButton {
     border-radius: 9px;
     font-size: 14px;
     font-weight: 600;
-    font-family: Roboto;
+    font-family: Arial;
     padding: 0 20px;
 }
 QPushButton:hover   { background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
@@ -208,7 +210,7 @@ QPushButton {{
     border: 1px solid rgba(255,255,255,0.15);
     border-radius: 9px;
     font-size: 14px;
-    font-family: Roboto;
+    font-family: Arial;
     padding: 0 16px;
 }}
 QPushButton:hover   {{
@@ -226,7 +228,7 @@ QPushButton {
     border: 1px solid rgba(239,68,68,0.35);
     border-radius: 9px;
     font-size: 14px;
-    font-family: Roboto;
+    font-family: Arial;
     padding: 0 14px;
 }
 QPushButton:hover   { background: #EF4444; color: white; border-color: #EF4444; }
@@ -242,7 +244,7 @@ QLineEdit, QComboBox, QDateEdit, QSpinBox, QDoubleSpinBox {{
     border-radius: 9px;
     padding: 0 12px;
     font-size: 14px;
-    font-family: Roboto;
+    font-family: Arial;
     height: 38px;
 }}
 QLineEdit:focus, QComboBox:focus, QDateEdit:focus,
@@ -257,7 +259,7 @@ QComboBox QAbstractItemView {{
     color: {TEXT_LIGHT};
     border: 1px solid #1E3659;
     font-size: 14px;
-    font-family: Roboto;
+    font-family: Arial;
     selection-background-color: #2563EB;
     selection-color: white;
     outline: none;
@@ -265,10 +267,10 @@ QComboBox QAbstractItemView {{
 """
 
 # ── Dialog / Form helpers ─────────────────────────────────────────────────────
-QSS_DIALOG        = "background:#FFFFFF; color:#1E293B; font-family:Roboto;"
-QSS_SECTION_TITLE = f"color:{TEXT_LIGHT};font-size:15px;font-weight:700;font-family:Roboto;"
-QSS_LABEL_MUTED   = f"color:{TEXT_MUTED};font-size:13px;font-family:Roboto;"
-QSS_LABEL_FIELD   = "color:#475569;font-size:13px;font-weight:600;font-family:Roboto;"
+QSS_DIALOG        = "background:#FFFFFF; color:#1E293B; font-family:Arial;"
+QSS_SECTION_TITLE = f"color:{TEXT_LIGHT};font-size:15px;font-weight:700;font-family:Arial;"
+QSS_LABEL_MUTED   = f"color:{TEXT_MUTED};font-size:13px;font-family:Arial;"
+QSS_LABEL_FIELD   = "color:#475569;font-size:13px;font-weight:600;font-family:Arial;"
 
 # ── Input inside white dialogs ────────────────────────────────────────────────
 QSS_INPUT_LIGHT = """
@@ -279,7 +281,7 @@ QLineEdit, QComboBox, QDateEdit, QSpinBox, QDoubleSpinBox {
     border-radius: 9px;
     padding: 0 12px;
     font-size: 14px;
-    font-family: Roboto;
+    font-family: Arial;
     height: 38px;
 }
 QLineEdit:focus, QComboBox:focus, QDateEdit:focus,
@@ -293,12 +295,90 @@ QComboBox QAbstractItemView {
     color: #1E293B;
     border: 1px solid #E2E8F0;
     font-size: 14px;
-    font-family: Roboto;
+    font-family: Arial;
     selection-background-color: #DBEAFE;
     selection-color: #1E3A8A;
     outline: none;
 }
 """
+
+
+class LoadingOverlay(QWidget):
+    """Overlay mờ hiện spinner + text khi đang load data."""
+
+    def __init__(self, parent: QWidget):
+        super().__init__(parent)
+        self.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, False)
+        self.setAttribute(Qt.WidgetAttribute.WA_TranslucentBackground)
+        self.setVisible(False)
+
+        self._angle = 0
+        self._spin_timer = QTimer(self)
+        self._spin_timer.timeout.connect(self._spin)
+
+        layout = QVBoxLayout(self)
+        layout.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self._lbl_spinner = QLabel()
+        self._lbl_spinner.setFixedSize(56, 56)
+        self._lbl_spinner.setAlignment(Qt.AlignmentFlag.AlignCenter)
+
+        self._lbl_text = QLabel("Đang tải dữ liệu...")
+        self._lbl_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lbl_text.setStyleSheet(
+            "color: #FFFFFF; font-size: 14px; font-family: Arial; "
+            "font-weight: 600; background: transparent;"
+        )
+
+        layout.addWidget(self._lbl_spinner, alignment=Qt.AlignmentFlag.AlignCenter)
+        layout.addSpacing(10)
+        layout.addWidget(self._lbl_text, alignment=Qt.AlignmentFlag.AlignCenter)
+
+    def _spin(self):
+        self._angle = (self._angle + 8) % 360
+        self._lbl_spinner.update()
+        self.update()
+
+    def show_loading(self, text: str = "Đang tải dữ liệu..."):
+        self._lbl_text.setText(text)
+        self.resize(self.parent().size())
+        self.raise_()
+        self.setVisible(True)
+        self._spin_timer.start(16)
+
+    def hide_loading(self):
+        self._spin_timer.stop()
+        self.setVisible(False)
+
+    def resizeEvent(self, e):
+        if self.parent():
+            self.resize(self.parent().size())
+        super().resizeEvent(e)
+
+    def paintEvent(self, _):
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+        w, h = self.width(), self.height()
+
+        # Nền mờ
+        p.fillRect(0, 0, w, h, QColor(0, 0, 0, 160))
+
+        # Spinner tròn
+        cx, cy = w / 2, h / 2 - 20
+        r = 22
+        pen = QPen(QColor(255, 255, 255, 40), 4)
+        pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(pen)
+        p.drawEllipse(QRectF(cx - r, cy - r, r * 2, r * 2))
+
+        # Arc xoay
+        arc_pen = QPen(QColor(96, 165, 250), 4)
+        arc_pen.setCapStyle(Qt.PenCapStyle.RoundCap)
+        p.setPen(arc_pen)
+        p.drawArc(QRectF(cx - r, cy - r, r * 2, r * 2),
+                  (-self._angle) * 16, 100 * 16)
+
+        p.end()
 
 
 def make_card(parent=None, radius: int = 16, shadow_blur: int = 30,
@@ -328,9 +408,11 @@ class BaseView(AnimatedBackground):
     def __init__(self):
         super().__init__()
         self._workers: list[ApiWorker] = []
-        self.setStyleSheet(f"color: {TEXT_LIGHT}; font-family: Roboto;")
+        self._loading_count = 0
+        self.setStyleSheet(f"color: {TEXT_LIGHT}; font-family: Arial;")
         self._build_base()
         self.build_ui()
+        self._overlay = LoadingOverlay(self)
 
     def _build_base(self):
         outer = QVBoxLayout(self)
@@ -352,11 +434,11 @@ class BaseView(AnimatedBackground):
         lbl_col = QVBoxLayout()
         lbl_col.setSpacing(2)
         self._lbl_title = QLabel(self.PAGE_TITLE)
-        self._lbl_title.setFont(QFont("Roboto", 18, QFont.Weight.Bold))
+        self._lbl_title.setFont(QFont("Arial", 18, QFont.Weight.Bold))
         self._lbl_title.setStyleSheet(f"color:{TEXT_LIGHT}; background:transparent;")
         self._lbl_sub = QLabel(self.PAGE_SUB)
         self._lbl_sub.setStyleSheet(
-            f"color:{TEXT_MUTED}; font-size:13px; font-family:Roboto; background:transparent;"
+            f"color:{TEXT_MUTED}; font-size:13px; font-family:Arial; background:transparent;"
         )
         lbl_col.addWidget(self._lbl_title)
         lbl_col.addWidget(self._lbl_sub)
@@ -439,7 +521,7 @@ class BaseView(AnimatedBackground):
         item = QTableWidgetItem(str(text))
         item.setTextAlignment(align)
         if bold:
-            item.setFont(QFont("Roboto", 14, QFont.Weight.Bold))
+            item.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         if color:
             item.setForeground(QColor(color))
         return item
@@ -454,14 +536,35 @@ class BaseView(AnimatedBackground):
 
     # ── Async ────────────────────────────────────────────────────────────────
 
-    def run_async(self, fn, on_success=None, on_error=None) -> ApiWorker:
+    def run_async(self, fn, on_success=None, on_error=None,
+                  loading_text: str = "Đang tải dữ liệu...") -> ApiWorker:
+        self._loading_count += 1
+        self._overlay.show_loading(loading_text)
+
+        def _done(result):
+            self._loading_count = max(0, self._loading_count - 1)
+            if self._loading_count == 0:
+                self._overlay.hide_loading()
+            if on_success:
+                on_success(result)
+
+        def _err(msg: str):
+            self._loading_count = max(0, self._loading_count - 1)
+            if self._loading_count == 0:
+                self._overlay.hide_loading()
+            (on_error or self._default_error)(msg)
+
         w = ApiWorker(fn)
-        if on_success:
-            w.success.connect(on_success)
-        w.error.connect(on_error or self._default_error)
+        w.success.connect(_done)
+        w.error.connect(_err)
         w.start()
         self._workers.append(w)
         return w
+
+    def resizeEvent(self, e):
+        super().resizeEvent(e)
+        if hasattr(self, "_overlay"):
+            self._overlay.resize(self.size())
 
     def _default_error(self, msg: str):
         QMessageBox.warning(self, "Lỗi", msg)

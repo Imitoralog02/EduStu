@@ -47,11 +47,11 @@ class LoginView(AnimatedBackground):
         lay.setSpacing(0)
 
         brand = QLabel("EduStu")
-        brand.setFont(QFont("Roboto", 44, QFont.Weight.Bold))
+        brand.setFont(QFont("Arial", 44, QFont.Weight.Bold))
         brand.setStyleSheet("color: white; background: transparent; letter-spacing: 3px;")
 
         tagline = QLabel("Nền tảng quản lý\nsinh viên thế hệ mới")
-        tagline.setFont(QFont("Roboto", 17))
+        tagline.setFont(QFont("Arial", 17))
         tagline.setStyleSheet(
             "color: rgba(255,255,255,0.72); background: transparent;"
         )
@@ -78,7 +78,7 @@ class LoginView(AnimatedBackground):
             tx = QLabel(text)
             tx.setStyleSheet(
                 "color: rgba(255,255,255,0.85); font-size: 14px;"
-                "font-family: Roboto; background: transparent;"
+                "font-family: Arial; background: transparent;"
             )
             row.addWidget(ic)
             row.addWidget(tx)
@@ -90,7 +90,7 @@ class LoginView(AnimatedBackground):
         yr = QLabel("Đại học Công Nghệ Đông Á · 2024–2025")
         yr.setStyleSheet(
             "color: rgba(255,255,255,0.4); font-size: 11px;"
-            "font-family: Roboto; background: transparent;"
+            "font-family: Arial; background: transparent;"
         )
         lay.addWidget(yr)
 
@@ -127,7 +127,7 @@ class LoginView(AnimatedBackground):
         dot = QFrame(); dot.setFixedSize(10, 10)
         dot.setStyleSheet("background:#2563EB; border-radius:5px;")
         logo = QLabel("EduStu")
-        logo.setFont(QFont("Roboto", 15, QFont.Weight.Bold))
+        logo.setFont(QFont("Arial", 15, QFont.Weight.Bold))
         logo.setStyleSheet("color:#2563EB; background:transparent;")
         top.addWidget(dot); top.addSpacing(6); top.addWidget(logo)
         top.addStretch()
@@ -136,11 +136,11 @@ class LoginView(AnimatedBackground):
 
         # title
         title = QLabel("Chào mừng trở lại 👋")
-        title.setFont(QFont("Roboto", 21, QFont.Weight.Bold))
+        title.setFont(QFont("Arial", 21, QFont.Weight.Bold))
         title.setStyleSheet("color:#0F172A; background:transparent;")
         sub = QLabel("Đăng nhập vào hệ thống quản lý sinh viên")
         sub.setStyleSheet(
-            "color:#64748B; font-size:13px; font-family:Roboto; background:transparent;"
+            "color:#64748B; font-size:13px; font-family:Arial; background:transparent;"
         )
         sub.setWordWrap(True)
         lay.addWidget(title)
@@ -153,7 +153,7 @@ class LoginView(AnimatedBackground):
         lbl_u = QLabel("Tên đăng nhập")
         lbl_u.setStyleSheet(
             "color:#475569; font-size:13px; font-weight:600;"
-            "font-family:Roboto; background:transparent;"
+            "font-family:Arial; background:transparent;"
         )
         self.inp_user = self._inp("Nhập tên đăng nhập...")
         lay.addWidget(lbl_u); lay.addSpacing(6); lay.addWidget(self.inp_user)
@@ -163,7 +163,7 @@ class LoginView(AnimatedBackground):
         lbl_p = QLabel("Mật khẩu")
         lbl_p.setStyleSheet(
             "color:#475569; font-size:13px; font-weight:600;"
-            "font-family:Roboto; background:transparent;"
+            "font-family:Arial; background:transparent;"
         )
         self.inp_pass = self._inp("Nhập mật khẩu...", password=True)
         self.inp_pass.returnPressed.connect(self._login)
@@ -180,7 +180,7 @@ class LoginView(AnimatedBackground):
                 background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
                     stop:0 #2563EB, stop:1 #7C3AED);
                 color: white; border: none; border-radius: 14px;
-                font-size:15px; font-weight:700; font-family:Roboto;
+                font-size:15px; font-weight:700; font-family:Arial;
             }
             QPushButton:hover {
                 background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
@@ -196,7 +196,7 @@ class LoginView(AnimatedBackground):
         self.lbl_err = QLabel("")
         self.lbl_err.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.lbl_err.setStyleSheet("""
-            color:#DC2626; font-size:13px; font-family:Roboto;
+            color:#DC2626; font-size:13px; font-family:Arial;
             background:#FEF2F2; border:1.5px solid #FCA5A5;
             border-radius:10px; padding:8px 12px;
         """)
@@ -209,7 +209,7 @@ class LoginView(AnimatedBackground):
         footer = QLabel("Đại học Công Nghệ Đông Á · 2024–2025")
         footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
         footer.setStyleSheet(
-            "color:#94A3B8; font-size:11px; font-family:Roboto; background:transparent;"
+            "color:#94A3B8; font-size:11px; font-family:Arial; background:transparent;"
         )
         lay.addWidget(footer)
 
@@ -225,7 +225,7 @@ class LoginView(AnimatedBackground):
             QLineEdit {
                 background:#F8FAFC; color:#1E293B;
                 border:2px solid #E2E8F0; border-radius:12px;
-                padding:0 14px; font-size:14px; font-family:Roboto;
+                padding:0 14px; font-size:14px; font-family:Arial;
             }
             QLineEdit:focus { border-color:#2563EB; background:#EFF6FF; }
         """)

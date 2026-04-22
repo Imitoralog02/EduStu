@@ -16,17 +16,17 @@ def main():
             border-radius: 6px;
             padding: 5px 10px;
             font-size: 13px;
-            font-family: Roboto;
+            font-family: Arial;
         }}
         QMessageBox {{
             background: #0D1B3E;
             color: #F1F5F9;
-            font-family: Roboto;
+            font-family: Arial;
         }}
         QMessageBox QLabel {{
             color: #F1F5F9;
             font-size: 14px;
-            font-family: Roboto;
+            font-family: Arial;
         }}
         QMessageBox QPushButton {{
             background: qlineargradient(x1:0,y1:0,x2:1,y2:0,
@@ -37,7 +37,7 @@ def main():
             padding: 6px 20px;
             min-width: 80px;
             font-size: 13px;
-            font-family: Roboto;
+            font-family: Arial;
         }}
         QMessageBox QPushButton:hover {{ background: #1D4ED8; }}
     """)

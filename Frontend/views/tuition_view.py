@@ -42,8 +42,8 @@ class TuitionView(BaseView):
             sh=_Sh(card); sh.setBlurRadius(16); sh.setOffset(0,3); sh.setColor(_C(0,0,0,22))
             card.setGraphicsEffect(sh)
             cl = QVBoxLayout(card); cl.setContentsMargins(20,14,20,14); cl.setSpacing(4)
-            lbl = QLabel(lbl_txt); lbl.setStyleSheet("color:#64748B;font-size:13px;font-family:Roboto;border:none;")
-            val = QLabel("—"); val.setFont(QFont("Roboto",28,QFont.Weight.Bold)); val.setStyleSheet(f"color:{clr};border:none;")
+            lbl = QLabel(lbl_txt); lbl.setStyleSheet("color:#64748B;font-size:13px;font-family:Arial;border:none;")
+            val = QLabel("—"); val.setFont(QFont("Arial",28,QFont.Weight.Bold)); val.setStyleSheet(f"color:{clr};border:none;")
             cl.addWidget(lbl); cl.addWidget(val)
             self._stat_vals.append(val)
             stat_row.addWidget(card)
@@ -123,7 +123,7 @@ class PaymentForm(QDialog):
         root = QVBoxLayout(self)
         root.setContentsMargins(24,20,24,20); root.setSpacing(12)
         title = QLabel("Ghi nhận thanh toán")
-        title.setFont(QFont("Roboto",14,QFont.Weight.Bold)); root.addWidget(title)
+        title.setFont(QFont("Arial",14,QFont.Weight.Bold)); root.addWidget(title)
         sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine); sep.setStyleSheet(f"color:{BORDER};"); root.addWidget(sep)
 
         grid = QGridLayout(); grid.setSpacing(10)
@@ -180,7 +180,7 @@ class PaymentHistoryDialog(QDialog):
         root.setContentsMargins(20, 16, 20, 16); root.setSpacing(12)
 
         title = QLabel(f"Lịch sử thanh toán học phí")
-        title.setFont(QFont("Roboto", 14, QFont.Weight.Bold))
+        title.setFont(QFont("Arial", 14, QFont.Weight.Bold))
         sub = QLabel(f"{ho_ten}  |  MSSV: {mssv}")
         sub.setStyleSheet(f"color:{TEXT_MUTED};font-size:12px;")
         root.addWidget(title); root.addWidget(sub)
