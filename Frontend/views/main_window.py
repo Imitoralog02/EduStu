@@ -6,7 +6,7 @@ from PyQt6.QtWidgets import (
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont
 from utils.session import Session
-from utils.config import PRIMARY, SECONDARY, ACCENT, HIGHLIGHT, TEXT_LIGHT, TEXT_MUTED, BORDER
+from utils.config import PRIMARY, SECONDARY, ACCENT, TEXT_LIGHT, TEXT_MUTED, BORDER
 
 NAV_ITEMS = [
     ("dashboard", "  Dashboard",   "admin phongdt giaovien"),
@@ -14,7 +14,9 @@ NAV_ITEMS = [
     ("hocphan",   "  Học phần",    "admin phongdt giaovien"),
     ("diem",      "  Điểm số",     "admin phongdt giaovien"),
     ("hocphi",    "  Học phí",     "admin phongdt"),
+    ("giayto",    "  Giấy tờ",     "admin phongdt"),
     ("baocao",    "  Báo cáo",     "admin phongdt"),
+    # enrollment_view đã bị loại bỏ
 ]
 
 
@@ -181,6 +183,7 @@ class MainWindow(QMainWindow):
             "hocphan":   lambda: __import__("views.course_view",    fromlist=["CourseView"]).CourseView(),
             "diem":      lambda: __import__("views.grade_view",     fromlist=["GradeView"]).GradeView(),
             "hocphi":    lambda: __import__("views.tuition_view",   fromlist=["TuitionView"]).TuitionView(),
+            "giayto":    lambda: __import__("views.document_view",  fromlist=["DocumentView"]).DocumentView(),
             "baocao":    lambda: __import__("views.report_view",    fromlist=["ReportView"]).ReportView(),
         }
 

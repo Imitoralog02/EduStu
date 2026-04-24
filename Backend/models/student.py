@@ -28,5 +28,6 @@ class Student(Base):
     sdt_phu_huynh = Column(String(20), nullable=True)
 
     enrollments = relationship("Enrollment", back_populates="student", cascade="all, delete-orphan")
-    grades = relationship("Grade", back_populates="student", cascade="all, delete-orphan")
-    tuition = relationship("Tuition", back_populates="student", uselist=False, cascade="all, delete-orphan")
+    grades      = relationship("Grade", back_populates="student", cascade="all, delete-orphan")
+    tuition     = relationship("Tuition", back_populates="student", uselist=False, cascade="all, delete-orphan")
+    documents   = relationship("StudentDocument", back_populates="student", cascade="all, delete-orphan")

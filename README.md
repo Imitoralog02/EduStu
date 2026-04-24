@@ -1,4 +1,4 @@
-# EduStu — Hệ thống Quản lý Sinh viên
+# EduStu — Hệ thống Quản lý hồ sơ Sinh viên
 
 Ứng dụng desktop quản lý sinh viên toàn diện, kết hợp **FastAPI** (backend) và **PyQt6** (frontend), hỗ trợ quản lý hồ sơ, điểm số, học phí và báo cáo thống kê.
 
@@ -110,7 +110,7 @@ ACCESS_TOKEN_EXPIRE_MINUTES=480
 
 ```bash
 cd Backend
-uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+..\venv\Scripts\python -m uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 API docs: http://localhost:8000/docs
@@ -121,7 +121,7 @@ Mở terminal mới (vẫn trong virtualenv):
 
 ```bash
 cd Frontend
-python main.py
+..\venv\Scripts\python main.py
 ```
 
 ---

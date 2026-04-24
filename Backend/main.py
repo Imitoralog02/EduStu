@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from routers import auth, students, courses, grades, tuition, reports
+from routers import auth, students, courses, grades, tuition, reports, documents
 
 app = FastAPI(
     title="EduStu API",
@@ -23,6 +23,7 @@ app.include_router(courses.router)
 app.include_router(grades.router)
 app.include_router(tuition.router)
 app.include_router(reports.router)
+app.include_router(documents.router)
 
 
 @app.get("/")

@@ -3,6 +3,7 @@ from PyQt6.QtWidgets import (
     QHBoxLayout, QVBoxLayout, QLineEdit, QComboBox,
     QMessageBox, QFileDialog, QWidget, QPushButton,
     QDialog, QGridLayout, QLabel, QDateEdit, QFrame,
+    QScrollArea,
 )
 from PyQt6.QtCore import Qt, QTimer, QDate
 from PyQt6.QtGui import QFont
@@ -13,6 +14,11 @@ from utils.config import (
     TRANG_THAI_SV, KHOA_LIST, GIOI_TINH, SUCCESS, DANGER, WARNING
 )
 from utils.helpers import fmt_date, badge_color
+
+LOAI_GIAY_YEU_CAU = [
+    "CCCD/CMND", "Giấy khai sinh", "Học bạ THPT",
+    "Bằng tốt nghiệp THPT", "Ảnh thẻ 3x4", "Sổ hộ khẩu",
+]
 
 COLS = ["MSSV", "Họ và tên", "Lớp", "Khoa", "Ngày sinh", "Trạng thái", "Thao tác"]
 
@@ -144,12 +150,20 @@ class StudentView(BaseView):
         return c
 
     def _open_profile(self, mssv: str):
-        raw = self._ctrl._svc.get_by_mssv(mssv)
+        try:
+            raw = self._ctrl._svc.get_by_mssv(mssv)
+        except Exception as e:
+            QMessageBox.warning(self, "Lỗi", str(e))
+            return
         dlg = StudentProfileDialog(data=raw)
         dlg.exec()
 
     def _open_add(self):
-        dlg = StudentForm(on_save=self._load)
+        def _after_save():
+            self._load()
+            _show_required_docs_notice(self)
+
+        dlg = StudentForm(on_save=_after_save)
         dlg.exec()
 
     def _open_edit(self, mssv: str):
@@ -364,6 +378,21 @@ class StudentForm(QDialog):
             self._ctrl.create(data, on_success=ok, on_error=err)
 
 
+def _show_required_docs_notice(parent):
+    """Show popup listing all required documents after adding a new student."""
+    msg = QMessageBox(parent)
+    msg.setWindowTitle("Thông báo hồ sơ nhập học")
+    msg.setIcon(QMessageBox.Icon.Information)
+    docs_list = "\n".join(f"  • {d}" for d in LOAI_GIAY_YEU_CAU)
+    msg.setText(
+        "Sinh viên mới đã được thêm thành công!\n\n"
+        "Yêu cầu nộp các giấy tờ hồ sơ sau:\n\n"
+        f"{docs_list}\n\n"
+        "Vui lòng cập nhật tình trạng nộp hồ sơ trong mục Giấy tờ."
+    )
+    msg.exec()
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # Dialog: Thông tin cá nhân sinh viên
 # ══════════════════════════════════════════════════════════════════════════════
@@ -375,8 +404,16 @@ class StudentProfileDialog(QDialog):
         self._data = data
         ho_ten = data.get("ho_ten", "Sinh viên")
         self.setWindowTitle(f"Hồ sơ sinh viên — {ho_ten}")
-        self.setFixedSize(480, 560)
+        self.setFixedSize(540, 740)
         self.setStyleSheet("background:#FFFFFF; color:#1E293B; font-family:Arial;")
+
+        # Fetch documents synchronously
+        from controllers.document import DocumentService
+        try:
+            self._docs = DocumentService().get_docs(data.get("mssv", "")) or []
+        except Exception:
+            self._docs = []
+
         self._build(data)
 
     def _build(self, d: dict):
@@ -389,115 +426,157 @@ class StudentProfileDialog(QDialog):
         header.setStyleSheet(
             "QFrame{background:#F8FAFC; border-bottom:1.5px solid #E2E8F0;}"
         )
-        header.setFixedHeight(130)
+        header.setFixedHeight(120)
         hl = QHBoxLayout(header)
-        hl.setContentsMargins(28, 20, 28, 20)
-        hl.setSpacing(18)
+        hl.setContentsMargins(24, 16, 24, 16)
+        hl.setSpacing(16)
 
-        # Avatar tròn
         from models.student import Student as _Sv
-        sv_tmp = _Sv(mssv=d.get("mssv","?"), ho_ten=d.get("ho_ten","?"))
+        sv_tmp = _Sv(mssv=d.get("mssv", "?"), ho_ten=d.get("ho_ten", "?"))
         av = QLabel(sv_tmp.avatar_text)
-        av.setFixedSize(70, 70)
+        av.setFixedSize(68, 68)
         av.setAlignment(Qt.AlignmentFlag.AlignCenter)
         av.setStyleSheet(
-            "background:#DBEAFE;color:#2563EB;border-radius:35px;"
+            "background:#DBEAFE;color:#2563EB;border-radius:34px;"
             "font-size:22px;font-weight:700;font-family:Arial;border:none;"
         )
 
-        # Tên + MSSV + badge trạng thái
         info_col = QVBoxLayout()
-        info_col.setSpacing(4)
-
+        info_col.setSpacing(3)
         name_lbl = QLabel(d.get("ho_ten", "—"))
-        name_lbl.setFont(QFont("Arial", 16, QFont.Weight.Bold))
+        name_lbl.setFont(QFont("Arial", 15, QFont.Weight.Bold))
         name_lbl.setStyleSheet("color:#0F172A;border:none;")
-
         mssv_lbl = QLabel(d.get("mssv", ""))
         mssv_lbl.setStyleSheet("color:#64748B;font-size:13px;font-family:Arial;border:none;")
-
         tt = d.get("trang_thai", "")
-        tt_colors = {
-            "Đang học": SUCCESS, "Dang hoc": SUCCESS,
-            "Thôi học": DANGER,  "Thoi hoc": DANGER,
-            "Bảo lưu":  WARNING, "Bao luu":  WARNING,
-        }
-        tt_clr = tt_colors.get(tt, TEXT_MUTED)
+        tt_clr = {
+            "Đang học": SUCCESS, "Thôi học": DANGER, "Bảo lưu": WARNING,
+        }.get(tt, TEXT_MUTED)
         tt_lbl = QLabel(f"● {tt}")
-        tt_lbl.setStyleSheet(
-            f"color:{tt_clr};font-size:12px;font-weight:600;border:none;"
-        )
-
+        tt_lbl.setStyleSheet(f"color:{tt_clr};font-size:12px;font-weight:600;border:none;")
         info_col.addWidget(name_lbl)
         info_col.addWidget(mssv_lbl)
         info_col.addWidget(tt_lbl)
         info_col.addStretch()
-
         hl.addWidget(av)
         hl.addLayout(info_col)
         root.addWidget(header)
 
-        # ── Body: danh sách thông tin ──────────────────────────────────────
-        body = QFrame()
-        body.setStyleSheet("QFrame{background:#FFFFFF;}")
-        bl = QVBoxLayout(body)
-        bl.setContentsMargins(28, 20, 28, 20)
+        # ── Missing docs banner ────────────────────────────────────────────
+        missing = [doc for doc in self._docs if not doc.get("da_nop", False)]
+        if missing:
+            banner = QFrame()
+            banner.setStyleSheet(
+                "QFrame{background:#FEF2F2;border-bottom:1px solid #FECACA;}"
+            )
+            bl2 = QVBoxLayout(banner)
+            bl2.setContentsMargins(24, 10, 24, 10)
+            bl2.setSpacing(4)
+            warn_title = QLabel(f"⚠  Còn thiếu {len(missing)} giấy tờ chưa nộp")
+            warn_title.setStyleSheet(
+                "color:#DC2626;font-size:13px;font-weight:700;border:none;font-family:Arial;"
+            )
+            bl2.addWidget(warn_title)
+            names = ", ".join(doc.get("loai_giay", "") for doc in missing)
+            warn_detail = QLabel(names)
+            warn_detail.setWordWrap(True)
+            warn_detail.setStyleSheet(
+                "color:#B91C1C;font-size:12px;border:none;font-family:Arial;"
+            )
+            bl2.addWidget(warn_detail)
+            root.addWidget(banner)
+
+        # ── Scrollable body ────────────────────────────────────────────────
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        scroll.setStyleSheet("QScrollArea{background:#FFFFFF;border:none;}")
+
+        body_widget = QWidget()
+        body_widget.setStyleSheet("background:#FFFFFF;")
+        bl = QVBoxLayout(body_widget)
+        bl.setContentsMargins(24, 18, 24, 18)
         bl.setSpacing(0)
 
         from utils.helpers import fmt_date
 
-        # Nhóm thông tin cơ bản
         self._section(bl, "Thông tin cơ bản")
-        rows_basic = [
-            ("Mã sinh viên",     d.get("mssv", "—")),
-            ("Họ và tên",        d.get("ho_ten", "—")),
-            ("Ngày sinh",        fmt_date(d.get("ngay_sinh", ""))),
-            ("Giới tính",        d.get("gioi_tinh", "—")),
-            ("Khoa",             d.get("khoa", "—")),
-            ("Lớp",              d.get("lop", "—")),
-            ("Năm nhập học",     str(d.get("nam_nhap_hoc", "") or "—")),
+        for label, value in [
+            ("Mã sinh viên",      d.get("mssv", "—")),
+            ("Họ và tên",         d.get("ho_ten", "—")),
+            ("Ngày sinh",         fmt_date(d.get("ngay_sinh", ""))),
+            ("Giới tính",         d.get("gioi_tinh", "—")),
+            ("Khoa",              d.get("khoa", "—")),
+            ("Lớp",               d.get("lop", "—")),
+            ("Năm nhập học",      str(d.get("nam_nhap_hoc", "") or "—")),
             ("Đối tượng ưu tiên", d.get("doi_tuong", "") or "—"),
-        ]
-        for label, value in rows_basic:
+        ]:
             self._info_row(bl, label, value)
 
-        sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
-        sep.setStyleSheet(f"color:{BORDER};margin:12px 0;"); bl.addWidget(sep)
-
-        # Nhóm liên lạc & cá nhân
+        self._sep(bl)
         self._section(bl, "Liên lạc & Cư trú")
-        rows_contact = [
+        for label, value in [
             ("Số điện thoại",  d.get("so_dien_thoai", "—")),
             ("Email",          d.get("email", "—")),
             ("Nơi ở hiện tại", d.get("dia_chi", "") or "—"),
-        ]
-        for label, value in rows_contact:
+        ]:
             self._info_row(bl, label, value)
 
-        sep2 = QFrame(); sep2.setFrameShape(QFrame.Shape.HLine)
-        sep2.setStyleSheet(f"color:{BORDER};margin:12px 0;"); bl.addWidget(sep2)
-
-        # Nhóm gia đình
+        self._sep(bl)
         self._section(bl, "Thông tin gia đình")
-        rows_family = [
-            ("Họ tên cha",     d.get("ho_ten_cha", "") or "—"),
-            ("Họ tên mẹ",      d.get("ho_ten_me", "") or "—"),
-            ("SĐT phụ huynh",  d.get("sdt_phu_huynh", "") or "—"),
-        ]
-        for label, value in rows_family:
+        for label, value in [
+            ("Họ tên cha",    d.get("ho_ten_cha", "") or "—"),
+            ("Họ tên mẹ",     d.get("ho_ten_me", "") or "—"),
+            ("SĐT phụ huynh", d.get("sdt_phu_huynh", "") or "—"),
+        ]:
             self._info_row(bl, label, value)
+
+        self._sep(bl)
+        self._section(bl, "Giấy tờ hồ sơ")
+        if self._docs:
+            for doc in self._docs:
+                da_nop = doc.get("da_nop", False)
+                loai   = doc.get("loai_giay", "")
+                ngay   = fmt_date(doc.get("ngay_nop", "")) if doc.get("ngay_nop") else ""
+                dot    = "✓" if da_nop else "✗"
+                clr    = SUCCESS if da_nop else DANGER
+                row = QHBoxLayout()
+                dot_lbl = QLabel(dot)
+                dot_lbl.setFixedWidth(20)
+                dot_lbl.setStyleSheet(f"color:{clr};font-size:14px;font-weight:700;border:none;")
+                name_lbl = QLabel(loai)
+                name_lbl.setStyleSheet(
+                    f"color:#1E293B;font-size:13px;font-weight:500;font-family:Arial;border:none;"
+                )
+                date_lbl = QLabel(f"Nộp: {ngay}" if ngay else ("Chưa nộp" if not da_nop else ""))
+                date_lbl.setStyleSheet(
+                    f"color:{'#64748B' if da_nop else DANGER};font-size:12px;font-family:Arial;border:none;"
+                )
+                row.addWidget(dot_lbl)
+                row.addWidget(name_lbl, stretch=1)
+                row.addWidget(date_lbl)
+                w = QWidget()
+                w.setStyleSheet("background:transparent;")
+                w.setLayout(row)
+                w.setFixedHeight(28)
+                bl.addWidget(w)
+        else:
+            no_doc = QLabel("Chưa có thông tin giấy tờ")
+            no_doc.setStyleSheet("color:#94A3B8;font-size:13px;font-family:Arial;border:none;")
+            bl.addWidget(no_doc)
 
         bl.addStretch()
-        root.addWidget(body)
+        scroll.setWidget(body_widget)
+        root.addWidget(scroll, stretch=1)
 
         # ── Footer: nút Đóng ──────────────────────────────────────────────
         footer = QFrame()
         footer.setStyleSheet(
             "QFrame{background:#F8FAFC; border-top:1.5px solid #E2E8F0;}"
         )
-        footer.setFixedHeight(60)
+        footer.setFixedHeight(58)
         fl = QHBoxLayout(footer)
-        fl.setContentsMargins(28, 0, 28, 0)
+        fl.setContentsMargins(24, 0, 24, 0)
         fl.addStretch()
         btn_close = QPushButton("Đóng")
         btn_close.setFixedHeight(36)
@@ -514,33 +593,35 @@ class StudentProfileDialog(QDialog):
         root.addWidget(footer)
 
     # ── Helpers layout ────────────────────────────────────────────────────
+    def _sep(self, layout: QVBoxLayout):
+        sep = QFrame()
+        sep.setFrameShape(QFrame.Shape.HLine)
+        sep.setStyleSheet(f"color:{BORDER};margin:10px 0;")
+        layout.addWidget(sep)
+
     def _section(self, layout: QVBoxLayout, title: str):
         lbl = QLabel(title.upper())
         lbl.setStyleSheet(
             "color:#2563EB;font-size:11px;font-weight:700;"
-            "font-family:Arial;letter-spacing:1px;border:none;margin-bottom:6px;"
+            "font-family:Arial;letter-spacing:1px;border:none;margin-bottom:4px;"
         )
         layout.addWidget(lbl)
 
     def _info_row(self, layout: QVBoxLayout, label: str, value: str):
         row = QHBoxLayout()
         row.setSpacing(12)
-
         lbl = QLabel(label)
-        lbl.setFixedWidth(140)
+        lbl.setFixedWidth(145)
         lbl.setStyleSheet("color:#64748B;font-size:13px;font-family:Arial;border:none;")
-
         val = QLabel(value)
         val.setStyleSheet(
             "color:#1E293B;font-size:13px;font-weight:500;font-family:Arial;border:none;"
         )
         val.setWordWrap(True)
-
         row.addWidget(lbl)
         row.addWidget(val, stretch=1)
-
         wrapper = QWidget()
         wrapper.setStyleSheet("background:transparent;")
         wrapper.setLayout(row)
-        wrapper.setFixedHeight(30)
+        wrapper.setFixedHeight(28)
         layout.addWidget(wrapper)
