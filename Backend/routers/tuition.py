@@ -4,7 +4,7 @@ from typing import Optional
 
 from database import get_db
 from dependencies import admin_or_phongdt
-from schemas.tuition import TuitionOut, PaymentRequest, PaymentResponse
+from schemas.tuition import TuitionOut, PaymentRequest, PaymentResponse, TuitionStats, NewSemesterRequest
 import services.tuition_service as svc
 
 router = APIRouter(prefix="/hocphi", tags=["Tuition"])
@@ -20,9 +20,23 @@ def list_tuition(
     return svc.list_tuition(db, search, trang_thai)
 
 
+@router.get("/thongke", response_model=TuitionStats)
+def get_stats(db: Session = Depends(get_db), _=Depends(admin_or_phongdt)):
+    return svc.get_stats(db)
+
+
 @router.get("/conno", response_model=list[TuitionOut])
 def list_debts(db: Session = Depends(get_db), _=Depends(admin_or_phongdt)):
     return svc.list_debts(db)
+
+
+@router.post("/hocky-moi")
+def create_semester(
+    body: NewSemesterRequest,
+    db: Session = Depends(get_db),
+    _=Depends(admin_or_phongdt),
+):
+    return svc.create_semester(db, body.so_tien, body.ghi_chu)
 
 
 @router.put("/miengiam/{mssv}")

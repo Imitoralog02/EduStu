@@ -466,7 +466,7 @@ class DocumentView(BaseView):
 
         for s in filtered:
             row = StudentRow(s, self._select_student)
-            if s["mssv"] == self._selected_mssv:
+            if s.mssv == self._selected_mssv:
                 row.set_selected(True)
             self._list_lay.insertWidget(self._list_lay.count() - 1, row)
             self._rows.append(row)

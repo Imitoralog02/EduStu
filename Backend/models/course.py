@@ -12,5 +12,4 @@ class Course(Base):
     giao_vien = Column(String(100), nullable=True)
     hoc_ky = Column(String(20), nullable=True)
 
-    enrollments = relationship("Enrollment", back_populates="course", cascade="all, delete-orphan")
     grades = relationship("Grade", back_populates="course", cascade="all, delete-orphan")

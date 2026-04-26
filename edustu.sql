@@ -41,7 +41,7 @@ CREATE TABLE IF NOT EXISTS students (
     sdt_phu_huynh VARCHAR(20)  NULL
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── Courses ──────────────────────────────────────────────────────────────────
+-- ── Courses(mon hoc) ──────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS courses (
     ma_hp      VARCHAR(20)  PRIMARY KEY,
     ten_hp     VARCHAR(200) NOT NULL,
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS enrollments (
     UNIQUE KEY uq_enrollment (mssv, ma_hp, hoc_ky)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── Grades ───────────────────────────────────────────────────────────────────
+-- ── Grades(diem) ───────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS grades (
     id      INT AUTO_INCREMENT PRIMARY KEY,
     mssv    VARCHAR(20) NOT NULL,
@@ -74,7 +74,7 @@ CREATE TABLE IF NOT EXISTS grades (
     UNIQUE KEY uq_grade (mssv, ma_hp, hoc_ky)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── Tuition ──────────────────────────────────────────────────────────────────
+-- ── Tuition(hoc phi) ──────────────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS tuition (
     id              INT AUTO_INCREMENT PRIMARY KEY,
     mssv            VARCHAR(20) NOT NULL UNIQUE,
@@ -99,7 +99,7 @@ CREATE TABLE IF NOT EXISTS payment_logs (
     CONSTRAINT fk_paylog_tuition FOREIGN KEY (tuition_id) REFERENCES tuition(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── Student Documents ────────────────────────────────────────────────────────
+-- ── Student Documents(giấy tòw) ────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS student_documents (
     id        INT AUTO_INCREMENT PRIMARY KEY,
     mssv      VARCHAR(20)  NOT NULL,

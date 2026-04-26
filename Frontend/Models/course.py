@@ -50,36 +50,3 @@ class Course:
 
     def __str__(self) -> str:
         return self.display_name
-
-
-@dataclass
-class Enrollment:
-    """
-    Đại diện cho một lần đăng ký học phần của sinh viên.
-    Tạo từ JSON trả về bởi GET /dangky/{mssv}.
-    """
-    id:      int
-    mssv:    str
-    ma_hp:   str
-    ten_hp:  str  = ""
-    hoc_ky:  str  = ""
-
-    @classmethod
-    def from_dict(cls, data: dict) -> Enrollment:
-        return cls(
-            id=data.get("id", 0),
-            mssv=data.get("mssv", ""),
-            ma_hp=data.get("ma_hp", ""),
-            ten_hp=data.get("ten_hp", ""),
-            hoc_ky=data.get("hoc_ky", ""),
-        )
-
-    def to_dict(self) -> dict:
-        return {
-            "mssv":   self.mssv,
-            "ma_hp":  self.ma_hp,
-            "hoc_ky": self.hoc_ky,
-        }
-
-    def __str__(self) -> str:
-        return f"{self.mssv} - {self.ma_hp} ({self.hoc_ky})"

@@ -28,19 +28,3 @@ class CourseOut(CourseBase):
     ma_hp: str
 
     model_config = {"from_attributes": True}
-
-
-class EnrollmentCreate(BaseModel):
-    mssv: str
-    ma_hp: str
-    hoc_ky: str
-
-
-class EnrollmentOut(BaseModel):
-    id: int
-    mssv: str
-    ma_hp: str
-    ten_hp: str
-    hoc_ky: str
-
-    model_config = {"from_attributes": True}

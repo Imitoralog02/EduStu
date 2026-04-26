@@ -463,7 +463,7 @@ class StudentProfileDialog(QDialog):
         root.addWidget(header)
 
         # ── Missing docs banner ────────────────────────────────────────────
-        missing = [doc for doc in self._docs if not doc.get("da_nop", False)]
+        missing = [doc for doc in self._docs if not doc.da_nop]
         if missing:
             banner = QFrame()
             banner.setStyleSheet(
@@ -477,7 +477,7 @@ class StudentProfileDialog(QDialog):
                 "color:#DC2626;font-size:13px;font-weight:700;border:none;font-family:Arial;"
             )
             bl2.addWidget(warn_title)
-            names = ", ".join(doc.get("loai_giay", "") for doc in missing)
+            names = ", ".join(doc.loai_giay for doc in missing)
             warn_detail = QLabel(names)
             warn_detail.setWordWrap(True)
             warn_detail.setStyleSheet(
@@ -535,9 +535,9 @@ class StudentProfileDialog(QDialog):
         self._section(bl, "Giấy tờ hồ sơ")
         if self._docs:
             for doc in self._docs:
-                da_nop = doc.get("da_nop", False)
-                loai   = doc.get("loai_giay", "")
-                ngay   = fmt_date(doc.get("ngay_nop", "")) if doc.get("ngay_nop") else ""
+                da_nop = doc.da_nop
+                loai   = doc.loai_giay
+                ngay   = fmt_date(doc.ngay_nop) if doc.ngay_nop else ""
                 dot    = "✓" if da_nop else "✗"
                 clr    = SUCCESS if da_nop else DANGER
                 row = QHBoxLayout()

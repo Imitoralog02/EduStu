@@ -1,5 +1,5 @@
 from typing import Optional
-from datetime import date
+from datetime import date, timedelta, datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from fastapi import HTTPException
@@ -24,6 +24,8 @@ def _to_out(tuition: Tuition, student: Student) -> dict:
     return {
         "mssv": tuition.mssv,
         "ho_ten": student.ho_ten,
+        "lop": student.lop,
+        "khoa": student.khoa,
         "phai_nop": tuition.phai_nop,
         "mien_giam": mien_giam,
         "ly_do_mien_giam": tuition.ly_do_mien_giam,
@@ -50,6 +52,34 @@ def list_tuition(db: Session, search: Optional[str], trang_thai: Optional[str]) 
 def list_debts(db: Session) -> list:
     rows = db.query(Tuition, Student).join(Student, Tuition.mssv == Student.mssv).all()
     return [_to_out(t, sv) for t, sv in rows if _compute_status(t) != "Đã nộp"]
+
+
+def get_stats(db: Session) -> dict:
+    rows = db.query(Tuition).all()
+    tong = len(rows)
+    da_dong = sum(1 for t in rows if _compute_status(t) == "Đã nộp")
+    return {"tong": tong, "da_dong": da_dong, "con_no": tong - da_dong}
+
+
+def create_semester(db: Session, so_tien: float, ghi_chu: Optional[str]) -> dict:
+    """Tạo học kỳ mới: reset toàn bộ học phí, hạn nộp = hôm nay + 7 ngày."""
+    han_nop = date.today() + timedelta(days=7)
+    rows = db.query(Tuition).all()
+    if not rows:
+        raise HTTPException(status_code=404, detail="Không có sinh viên nào trong hệ thống")
+    for t in rows:
+        t.phai_nop = so_tien
+        t.da_nop = 0.0
+        t.mien_giam = 0.0
+        t.ly_do_mien_giam = None
+        t.han_nop = han_nop
+        t.ghi_chu = ghi_chu
+    db.commit()
+    return {
+        "message": f"Đã tạo học kỳ mới cho {len(rows)} sinh viên",
+        "han_nop": str(han_nop),
+        "so_sinh_vien": len(rows),
+    }
 
 
 def update_mien_giam(db: Session, mssv: str, mien_giam: float, ly_do: Optional[str]) -> dict:
@@ -87,8 +117,13 @@ def record_payment(db: Session, mssv: str, so_tien: float, phuong_thuc: str, ghi
     tuition = db.query(Tuition).filter(Tuition.mssv == mssv).first()
     if not tuition:
         raise HTTPException(status_code=404, detail="Không tìm thấy thông tin học phí")
+    student = db.query(Student).filter(Student.mssv == mssv).first()
+
     tuition.da_nop += so_tien
     new_status = _compute_status(tuition)
+    thuc_phai_nop = max(0.0, tuition.phai_nop - (tuition.mien_giam or 0.0))
+    con_lai = max(0.0, thuc_phai_nop - tuition.da_nop)
+
     log = PaymentLog(
         tuition_id=tuition.id,
         mssv=mssv,
@@ -98,4 +133,17 @@ def record_payment(db: Session, mssv: str, so_tien: float, phuong_thuc: str, ghi
     )
     db.add(log)
     db.commit()
-    return {"message": "Ghi nhận thanh toán thành công", "trang_thai_moi": new_status}
+    db.refresh(log)
+
+    return {
+        "message": "Ghi nhận thanh toán thành công",
+        "trang_thai_moi": new_status,
+        "ho_ten": student.ho_ten if student else "",
+        "mssv": mssv,
+        "lop": student.lop if student else None,
+        "khoa": student.khoa if student else None,
+        "so_tien": so_tien,
+        "phuong_thuc": phuong_thuc,
+        "ngay_nop": str(log.ngay_nop) if log.ngay_nop else str(datetime.now()),
+        "con_lai": con_lai,
+    }

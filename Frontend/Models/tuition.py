@@ -1,39 +1,35 @@
 from __future__ import annotations
 from dataclasses import dataclass
+from typing import Optional
 
 
 @dataclass
 class Tuition:
-    """
-    Đại diện cho thông tin học phí của một sinh viên.
-    Tạo từ JSON trả về bởi GET /hocphi.
-    """
     mssv:       str
     ho_ten:     str   = ""
-    phai_nop:   float = 0.0    # tổng số tiền phải đóng
-    da_nop:     float = 0.0    # số tiền đã đóng
-    han_nop:    str   = ""     # hạn nộp "yyyy-MM-dd"
-    trang_thai: str   = ""     # "Đã nộp" | "Chưa nộp" | "Nộp thiếu" | "Quá hạn"
+    lop:        str   = ""
+    khoa:       str   = ""
+    phai_nop:   float = 0.0
+    da_nop:     float = 0.0
+    han_nop:    str   = ""
+    trang_thai: str   = ""
     ghi_chu:    str   = ""
-
-    # ------------------------------------------------------------------
-    # Computed properties
-    # ------------------------------------------------------------------
 
     @property
     def con_thieu(self) -> float:
-        """Số tiền còn thiếu chưa nộp."""
         return max(0.0, self.phai_nop - self.da_nop)
 
     @property
     def is_paid(self) -> bool:
-        """Đã đóng đủ học phí chưa."""
         return self.con_thieu == 0
 
     @property
     def is_overdue(self) -> bool:
-        """Có bị quá hạn không."""
         return self.trang_thai == "Quá hạn"
+
+    @property
+    def is_warning(self) -> bool:
+        return self.trang_thai in ("Chưa nộp", "Nộp thiếu", "Quá hạn")
 
     @property
     def phai_nop_display(self) -> str:
@@ -49,7 +45,6 @@ class Tuition:
 
     @property
     def han_nop_display(self) -> str:
-        """Chuyển 'yyyy-MM-dd' → 'dd/MM/yyyy'."""
         if not self.han_nop:
             return ""
         try:
@@ -58,18 +53,15 @@ class Tuition:
         except (IndexError, ValueError):
             return self.han_nop
 
-    # ------------------------------------------------------------------
-    # Chuyển đổi từ / sang dict
-    # ------------------------------------------------------------------
-
     @classmethod
     def from_dict(cls, data: dict) -> Tuition:
-        """Tạo Tuition từ dict JSON trả về bởi FastAPI."""
         return cls(
             mssv=data.get("mssv", ""),
             ho_ten=data.get("ho_ten", ""),
-            phai_nop=float(data.get("so_tien_phai_nop") or 0),
-            da_nop=float(data.get("so_tien_da_nop") or 0),
+            lop=data.get("lop") or "",
+            khoa=data.get("khoa") or "",
+            phai_nop=float(data.get("phai_nop") or data.get("so_tien_phai_nop") or 0),
+            da_nop=float(data.get("da_nop") or data.get("so_tien_da_nop") or 0),
             han_nop=data.get("han_nop", ""),
             trang_thai=data.get("trang_thai", ""),
             ghi_chu=data.get("ghi_chu", ""),
@@ -88,10 +80,5 @@ class Tuition:
         return f"{self.mssv} | {self.phai_nop_display} | {self.trang_thai}"
 
 
-# ------------------------------------------------------------------
-# Helper nội bộ
-# ------------------------------------------------------------------
-
 def _fmt_money(value: float) -> str:
-    """4200000 → '4.200.000 đ'"""
     return f"{int(value):,}".replace(",", ".") + " đ"

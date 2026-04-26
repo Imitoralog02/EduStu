@@ -1,6 +1,6 @@
 from __future__ import annotations
 from controllers.base import APIClient, ApiWorker
-from models.course import Course, Enrollment
+from models.course import Course
 
 
 # ======================================================================
@@ -98,82 +98,6 @@ class CourseController:
         if not (1 <= int(tc) <= 10):
             return "Số tín chỉ phải từ 1 đến 10."
         return None
-
-    def _run(self, fn, on_success, on_error) -> None:
-        worker = ApiWorker(fn)
-        if on_success:
-            worker.success.connect(on_success)
-        if on_error:
-            worker.error.connect(on_error)
-        worker.start()
-        self._workers.append(worker)
-
-
-# ======================================================================
-# EnrollmentService
-# ======================================================================
-
-class EnrollmentService(APIClient):
-
-    def get_by_student(self, mssv: str, hoc_ky: str = "") -> list:
-        """GET /dangky/{mssv}"""
-        return self.get(f"/dangky/{mssv}", params={"hoc_ky": hoc_ky})
-
-    def create(self, mssv: str, ma_hp: str, hoc_ky: str) -> dict:
-        """POST /dangky"""
-        return self.post("/dangky", {
-            "mssv":   mssv,
-            "ma_hp":  ma_hp,
-            "hoc_ky": hoc_ky,
-        })
-
-    def cancel(self, enrollment_id: int) -> dict:
-        """DELETE /dangky/{id}"""
-        return self.delete(f"/dangky/{enrollment_id}")
-
-
-# ======================================================================
-# EnrollmentController
-# ======================================================================
-
-class EnrollmentController:
-
-    def __init__(self):
-        self._svc     = EnrollmentService()
-        self._workers: list[ApiWorker] = []
-
-    def load_by_student(
-        self, mssv: str, hoc_ky: str = "", on_success=None, on_error=None
-    ) -> None:
-        """
-        Lấy danh sách HP đăng ký của 1 sinh viên.
-        on_success nhận: list[Enrollment]
-        """
-        def _do():
-            raw = self._svc.get_by_student(mssv, hoc_ky)
-            return [Enrollment.from_dict(e) for e in raw]
-
-        self._run(_do, on_success, on_error)
-
-    def enroll(
-        self, mssv: str, ma_hp: str, hoc_ky: str,
-        on_success=None, on_error=None
-    ) -> None:
-        """Validate → đăng ký học phần."""
-        if not mssv or not ma_hp or not hoc_ky:
-            if on_error:
-                on_error("Vui lòng điền đầy đủ MSSV, Mã HP và Học kỳ.")
-            return
-
-        def _do():
-            raw = self._svc.create(mssv, ma_hp, hoc_ky)
-            return Enrollment.from_dict(raw)
-
-        self._run(_do, on_success, on_error)
-
-    def cancel(self, enrollment_id: int, on_success=None, on_error=None) -> None:
-        """Hủy đăng ký học phần."""
-        self._run(lambda: self._svc.cancel(enrollment_id), on_success, on_error)
 
     def _run(self, fn, on_success, on_error) -> None:
         worker = ApiWorker(fn)
