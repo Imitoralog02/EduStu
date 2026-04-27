@@ -32,8 +32,17 @@ TRONG_SO_GK = 0.4
 TRONG_SO_CK = 0.6
 
 # Du lieu co dinh
-TRANG_THAI_SV = ["Dang hoc", "Thoi hoc", "Tot nghiep", "Bao luu"]
-TRANG_THAI_HP = ["Da dong", "Dong thieu", "Chua dong"]
+TRANG_THAI_SV = ["Đang học", "Bảo lưu", "Thôi học", "Cảnh báo"]
+TRANG_THAI_HP = ["Đã nộp", "Nộp thiếu", "Chưa nộp", "Quá hạn"]
 HOC_KY_LIST = ["HK1-2024-2025", "HK2-2024-2025", "HK1-2023-2024"]
-KHOA_LIST = ["Cong nghe thong tin", "Kinh te", "Ngoai ngu", "Dien - Dien tu"]
-GIOI_TINH = ["Nam", "Nu", "Khac"]
+KHOA_LIST = [
+    "Công nghệ thông tin",
+    "Kinh tế",
+    "Xây dựng",
+    "Ngoại ngữ",
+    "Điện - Điện tử",
+    "Cơ khí",
+    "Kế toán",
+    "Quản trị kinh doanh",
+]
+GIOI_TINH = ["Nam", "Nữ", "Khác"]

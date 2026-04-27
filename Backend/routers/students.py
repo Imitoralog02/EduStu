@@ -27,6 +27,14 @@ def list_students(
     return svc.list_students(db, search, khoa, trang_thai, lop, page, page_size)
 
 
+@router.get("/khoa-list")
+def get_khoa_list(db: Session = Depends(get_db), _=Depends(admin_or_phongdt)):
+    """Trả về danh sách các khoa đang có trong DB (distinct, bỏ null/rỗng, sort A-Z)."""
+    rows = db.query(Student.khoa).distinct().all()
+    result = sorted({r[0] for r in rows if r[0] and r[0].strip()})
+    return result
+
+
 @router.get("/{mssv}", response_model=StudentOut)
 def get_student(mssv: str, db: Session = Depends(get_db), _=Depends(admin_or_phongdt)):
     return svc.get_student(db, mssv)

@@ -11,6 +11,7 @@ from models.user import User
 from models.student import Student
 from models.course import Course
 from models.tuition import Tuition
+from models.document import DocumentType, LOAI_GIAY_DEFAULT
 from utils.security import hash_password
 from datetime import date
 
@@ -97,6 +98,16 @@ def seed_tuition(db: Session):
     print(f"Đã tạo {len(tuitions)} bản ghi học phí mẫu.")
 
 
+def seed_doc_types(db: Session):
+    if db.query(DocumentType).count() > 0:
+        print("Bảng document_types đã có dữ liệu, bỏ qua seed.")
+        return
+    for ten, bat_buoc, mo_ta, thu_tu in LOAI_GIAY_DEFAULT:
+        db.add(DocumentType(ten_loai=ten, bat_buoc=bat_buoc, mo_ta=mo_ta, thu_tu=thu_tu))
+    db.commit()
+    print(f"Đã tạo {len(LOAI_GIAY_DEFAULT)} loại giấy tờ mặc định.")
+
+
 if __name__ == "__main__":
     create_tables()
     with Session(engine) as db:
@@ -104,6 +115,7 @@ if __name__ == "__main__":
         seed_students(db)
         seed_courses(db)
         seed_tuition(db)
+        seed_doc_types(db)
     print("\nKhởi tạo database hoàn tất!")
     print("\nTài khoản mẫu:")
     print("  admin    / admin123  (Quản trị viên)")

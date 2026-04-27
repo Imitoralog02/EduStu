@@ -99,7 +99,16 @@ CREATE TABLE IF NOT EXISTS payment_logs (
     CONSTRAINT fk_paylog_tuition FOREIGN KEY (tuition_id) REFERENCES tuition(id) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
--- ── Student Documents(giấy tòw) ────────────────────────────────────────────────────────
+-- ── Document Types(loại giấy tờ) ─────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS document_types (
+    id       INT AUTO_INCREMENT PRIMARY KEY,
+    ten_loai VARCHAR(100) NOT NULL UNIQUE,
+    bat_buoc TINYINT(1)   NOT NULL DEFAULT 1,
+    mo_ta    TEXT,
+    thu_tu   INT          NOT NULL DEFAULT 0
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
+
+-- ── Student Documents(giấy tờ) ────────────────────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS student_documents (
     id        INT AUTO_INCREMENT PRIMARY KEY,
     mssv      VARCHAR(20)  NOT NULL,
@@ -107,6 +116,10 @@ CREATE TABLE IF NOT EXISTS student_documents (
     da_nop    TINYINT(1)   NOT NULL DEFAULT 0,
     ngay_nop  DATE,
     ghi_chu   TEXT,
+    file_path VARCHAR(500),
+    file_name VARCHAR(255),
+    file_size BIGINT,
+    mime_type VARCHAR(100),
     cap_nhat  TIMESTAMP    DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     CONSTRAINT fk_doc_student FOREIGN KEY (mssv) REFERENCES students(mssv) ON DELETE CASCADE,
     UNIQUE KEY uq_doc (mssv, loai_giay)
@@ -115,6 +128,15 @@ CREATE TABLE IF NOT EXISTS student_documents (
 -- ═════════════════════════════════════════════════════════════════════════════
 -- DỮ LIỆU MẪU
 -- ═════════════════════════════════════════════════════════════════════════════
+
+-- ── Loại giấy tờ mặc định ────────────────────────────────────────────────────
+INSERT INTO document_types (ten_loai, bat_buoc, mo_ta, thu_tu) VALUES
+    ('CCCD/CMND',              1, 'Bản photo công chứng',              1),
+    ('Giấy khai sinh',         1, 'Bản photo công chứng',              2),
+    ('Học bạ THPT',            1, 'Bản photo có xác nhận',             3),
+    ('Bằng tốt nghiệp THPT',   1, 'Bản photo công chứng hoặc bản gốc', 4),
+    ('Ảnh thẻ 3x4',            1, '4 ảnh màu nền trắng',               5),
+    ('Sổ hộ khẩu',             1, 'Bản photo công chứng',              6);
 
 -- ── Tài khoản hệ thống ───────────────────────────────────────────────────────
 -- Mật khẩu:  admin/admin123  |  phongdt/phong123  |  giaovien/giao123

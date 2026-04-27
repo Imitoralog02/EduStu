@@ -29,6 +29,10 @@ class StudentService(APIClient):
             "page_size":  page_size,
         })
 
+    def get_khoa_list(self) -> list:
+        """GET /sinhvien/khoa-list → list[str]"""
+        return self.get("/sinhvien/khoa-list")
+
     def get_by_mssv(self, mssv: str) -> dict:
         """GET /sinhvien/{mssv}"""
         return self.get(f"/sinhvien/{mssv}")
@@ -94,6 +98,10 @@ class StudentController:
     # ------------------------------------------------------------------
     # Lấy 1 sinh viên
     # ------------------------------------------------------------------
+
+    def load_khoa_list(self, on_success=None, on_error=None) -> None:
+        """Lấy danh sách khoa từ DB. on_success nhận: list[str]"""
+        self._run(lambda: self._svc.get_khoa_list(), on_success, on_error)
 
     def load_one(self, mssv: str, on_success=None, on_error=None) -> None:
         """

@@ -28,7 +28,8 @@ class StudentView(BaseView):
     PAGE_SUB   = "Quản lý hồ sơ sinh viên"
 
     def __init__(self):
-        self._ctrl = StudentController()
+        self._ctrl      = StudentController()
+        self._khoa_list = list(KHOA_LIST)   # fallback; sẽ được replace bởi API
         self._timer = QTimer()
         self._timer.setSingleShot(True)
         self._timer.timeout.connect(self._load)
@@ -52,7 +53,7 @@ class StudentView(BaseView):
         self.inp_search.setStyleSheet(QSS_INPUT)
         self.inp_search.textChanged.connect(lambda: self._timer.start(400))
 
-        self.cmb_khoa = self._combo(["Tất cả khoa"] + KHOA_LIST)
+        self.cmb_khoa = self._combo(["Tất cả khoa"] + self._khoa_list)
         self.cmb_tt   = self._combo(["Tất cả trạng thái"] + TRANG_THAI_SV)
         self.cmb_khoa.currentIndexChanged.connect(self._load)
         self.cmb_tt.currentIndexChanged.connect(self._load)
@@ -85,7 +86,24 @@ class StudentView(BaseView):
         self._root.addWidget(self.lbl_count)
 
     def refresh(self):
+        self._load_khoa_list()
         self._load()
+
+    def _load_khoa_list(self):
+        def _ok(khoa_list: list):
+            if not khoa_list:
+                return
+            self._khoa_list = khoa_list
+            current = self.cmb_khoa.currentText()
+            self.cmb_khoa.blockSignals(True)
+            self.cmb_khoa.clear()
+            self.cmb_khoa.addItems(["Tất cả khoa"] + khoa_list)
+            # Giữ lại lựa chọn cũ nếu vẫn tồn tại
+            idx = self.cmb_khoa.findText(current)
+            self.cmb_khoa.setCurrentIndex(idx if idx >= 0 else 0)
+            self.cmb_khoa.blockSignals(False)
+
+        self._ctrl.load_khoa_list(on_success=_ok, on_error=lambda _: None)
 
     def _load(self):
         search = self.inp_search.text().strip()
@@ -160,15 +178,16 @@ class StudentView(BaseView):
 
     def _open_add(self):
         def _after_save():
+            self._load_khoa_list()
             self._load()
             _show_required_docs_notice(self)
 
-        dlg = StudentForm(on_save=_after_save)
+        dlg = StudentForm(on_save=_after_save, khoa_list=self._khoa_list)
         dlg.exec()
 
     def _open_edit(self, mssv: str):
         raw = self._ctrl._svc.get_by_mssv(mssv)
-        dlg = StudentForm(data=raw, on_save=self._load)
+        dlg = StudentForm(data=raw, on_save=self._load, khoa_list=self._khoa_list)
         dlg.exec()
 
     def _delete(self, mssv: str):
@@ -190,12 +209,13 @@ class StudentView(BaseView):
 
 
 class StudentForm(QDialog):
-    def __init__(self, data: dict | None = None, on_save=None):
+    def __init__(self, data: dict | None = None, on_save=None, khoa_list: list | None = None):
         super().__init__()
-        self._data    = data or {}
-        self._on_save = on_save
-        self._ctrl    = StudentController()
-        self._is_edit = bool(data)
+        self._data      = data or {}
+        self._on_save   = on_save
+        self._ctrl      = StudentController()
+        self._is_edit   = bool(data)
+        self._khoa_list = khoa_list or list(KHOA_LIST)
         self.setWindowTitle("Sửa sinh viên" if self._is_edit else "Thêm sinh viên")
         self.setFixedSize(520, 780)
         self.setStyleSheet("background:#FFFFFF; color:#1E293B; font-family:Arial;")
@@ -252,7 +272,7 @@ class StudentForm(QDialog):
         self.f_ns.setFixedHeight(34)
         self.f_ns.setStyleSheet(QSS_INPUT_LIGHT)
         self.f_gt        = cmb(GIOI_TINH)
-        self.f_khoa      = cmb(KHOA_LIST)
+        self.f_khoa      = cmb(self._khoa_list)
         self.f_tt        = cmb(TRANG_THAI_SV)
         self.f_nam_nhap  = inp("VD: 2022")
         self.f_doi_tuong = inp("VD: Hộ nghèo, Dân tộc thiểu số...")
