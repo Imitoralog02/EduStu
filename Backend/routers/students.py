@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, Query, UploadFile, File
+from fastapi.responses import Response
 from sqlalchemy.orm import Session
 from typing import Optional
 import pandas as pd
@@ -21,10 +22,16 @@ def list_students(
     lop: Optional[str] = None,
     page: int = Query(1, ge=1),
     page_size: int = Query(20, ge=1, le=100),
+    nam_nhap_hoc: Optional[int] = None,
+    thieu_giay_to: bool = False,
+    no_hoc_phi: bool = False,
     db: Session = Depends(get_db),
     _=Depends(admin_or_phongdt),
 ):
-    return svc.list_students(db, search, khoa, trang_thai, lop, page, page_size)
+    return svc.list_students(
+        db, search, khoa, trang_thai, lop, page, page_size,
+        nam_nhap_hoc, thieu_giay_to, no_hoc_phi,
+    )
 
 
 @router.get("/khoa-list")
@@ -53,6 +60,17 @@ def update_student(mssv: str, body: StudentUpdate, db: Session = Depends(get_db)
 @router.delete("/{mssv}")
 def delete_student(mssv: str, db: Session = Depends(get_db), _=Depends(admin_or_phongdt)):
     return svc.delete_student(db, mssv)
+
+
+@router.get("/{mssv}/export")
+def export_student_profile(mssv: str, db: Session = Depends(get_db), _=Depends(admin_or_phongdt)):
+    """Xuất hồ sơ cá nhân sinh viên ra Excel (4 sheets)."""
+    data = svc.export_student_profile(db, mssv)
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename=hoso_{mssv}.xlsx"},
+    )
 
 
 @router.post("/import")

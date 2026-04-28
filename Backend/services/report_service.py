@@ -10,6 +10,8 @@ from utils.grade_calc import calc_tong_ket, compute_transcript_stats
 
 
 def get_dashboard(db: Session) -> dict:
+    from models.document import StudentDocument
+
     counts = dict(
         db.query(Student.trang_thai, func.count(Student.mssv))
         .group_by(Student.trang_thai)
@@ -32,7 +34,33 @@ def get_dashboard(db: Session) -> dict:
     tong_phai_nop = tuition_stats[0] or 0
     tong_da_thu   = tuition_stats[1] or 0
 
-    warned = db.query(Student.ho_ten).filter(Student.trang_thai == "Cảnh báo").limit(6).all()
+    # Cảnh báo học vụ
+    warned_rows = (
+        db.query(Student.mssv, Student.ho_ten)
+        .filter(Student.trang_thai == "Cảnh báo")
+        .limit(5).all()
+    )
+    # Học phí quá hạn
+    overdue_rows = (
+        db.query(Tuition.mssv, Student.ho_ten)
+        .join(Student, Student.mssv == Tuition.mssv)
+        .filter(Tuition.da_nop < Tuition.phai_nop, Tuition.han_nop < date.today())
+        .limit(5).all()
+    )
+    # Thiếu giấy tờ (lấy MSSV duy nhất có ít nhất 1 doc chưa nộp)
+    missing_doc_rows = (
+        db.query(StudentDocument.mssv, Student.ho_ten)
+        .join(Student, Student.mssv == StudentDocument.mssv)
+        .filter(StudentDocument.da_nop == False)
+        .distinct(StudentDocument.mssv)
+        .limit(5).all()
+    )
+
+    alerts = (
+        [{"loai": "hoc_vu",  "ho_ten": r.ho_ten, "mssv": r.mssv, "mo_ta": "Cảnh báo học vụ"}   for r in warned_rows]
+        + [{"loai": "hoc_phi", "ho_ten": r.ho_ten, "mssv": r.mssv, "mo_ta": "Học phí quá hạn"}  for r in overdue_rows]
+        + [{"loai": "giay_to", "ho_ten": r.ho_ten, "mssv": r.mssv, "mo_ta": "Thiếu giấy tờ"}    for r in missing_doc_rows]
+    )
 
     return {
         "tong_sv": tong_sv,
@@ -43,7 +71,10 @@ def get_dashboard(db: Session) -> dict:
         "no_hoc_phi": round(no_hoc_phi),
         "tong_phai_nop": round(tong_phai_nop),
         "tong_da_thu": round(tong_da_thu),
-        "alerts": [{"ho_ten": row.ho_ten, "mo_ta": "Cảnh báo học vụ"} for row in warned],
+        "alerts": alerts,
+        "so_canh_bao_hv": len(warned_rows),
+        "so_no_hoc_phi": len(overdue_rows),
+        "so_thieu_giay_to": len(missing_doc_rows),
     }
 
 

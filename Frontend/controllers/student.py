@@ -12,22 +12,32 @@ class StudentService(APIClient):
 
     def get_list(
         self,
-        search:     str = "",
-        khoa:       str = "",
-        trang_thai: str = "",
-        lop:        str = "",
-        page:       int = 1,
-        page_size:  int = 20,
+        search:        str = "",
+        khoa:          str = "",
+        trang_thai:    str = "",
+        lop:           str = "",
+        page:          int = 1,
+        page_size:     int = 20,
+        nam_nhap_hoc:  int | None = None,
+        thieu_giay_to: bool = False,
+        no_hoc_phi:    bool = False,
     ) -> dict:
         """GET /sinhvien → {"items": [...], "total": int}"""
-        return self.get("/sinhvien", params={
+        params: dict = {
             "search":     search,
             "khoa":       khoa,
             "trang_thai": trang_thai,
             "lop":        lop,
             "page":       page,
             "page_size":  page_size,
-        })
+        }
+        if nam_nhap_hoc:
+            params["nam_nhap_hoc"] = nam_nhap_hoc
+        if thieu_giay_to:
+            params["thieu_giay_to"] = True
+        if no_hoc_phi:
+            params["no_hoc_phi"] = True
+        return self.get("/sinhvien", params=params)
 
     def get_khoa_list(self) -> list:
         """GET /sinhvien/khoa-list → list[str]"""

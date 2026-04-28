@@ -7,7 +7,7 @@ from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QFont, QColor
 from views.base_view import BaseView, make_card
 from controllers.report import ReportController
-from utils.config import SUCCESS, WARNING, DANGER, INFO
+from utils.config import SUCCESS, WARNING, DANGER, INFO, TEXT_MUTED
 
 
 def _fmt_vnd(amount) -> str:
@@ -205,19 +205,42 @@ class DashboardView(BaseView):
         row2.addWidget(hp_card, stretch=2)
         self._root.addLayout(row2)
 
-        # ── Row 3: Cảnh báo gần đây ───────────────────────────────────────
-        alert_card = make_card(radius=14)
-        al_lay = QVBoxLayout(alert_card)
-        al_lay.setContentsMargins(20, 16, 20, 16)
-        al_lay.setSpacing(8)
-        t3 = QLabel("Cảnh báo gần đây")
-        t3.setFont(QFont("Arial", 13, QFont.Weight.Bold))
-        t3.setStyleSheet("color:#0F172A;border:none;")
-        al_lay.addWidget(t3)
-        self._alert_layout = QVBoxLayout()
-        self._alert_layout.setSpacing(6)
-        al_lay.addLayout(self._alert_layout)
-        self._root.addWidget(alert_card)
+        # ── Row 3: Cảnh báo tập trung (3 cột) ───────────────────────────
+        alert_row = QHBoxLayout()
+        alert_row.setSpacing(12)
+
+        def _alert_col(title: str, color: str) -> tuple:
+            card = make_card(radius=14)
+            card.setMinimumHeight(160)
+            lay = QVBoxLayout(card)
+            lay.setContentsMargins(16, 14, 16, 14)
+            lay.setSpacing(6)
+            hdr = QHBoxLayout()
+            dot = QLabel("●")
+            dot.setStyleSheet(f"color:{color};font-size:10px;border:none;")
+            t_lbl = QLabel(title)
+            t_lbl.setFont(QFont("Arial", 12, QFont.Weight.Bold))
+            t_lbl.setStyleSheet("color:#0F172A;border:none;")
+            hdr.addWidget(dot); hdr.addWidget(t_lbl); hdr.addStretch()
+            count_lbl = QLabel("0")
+            count_lbl.setStyleSheet(
+                f"color:white;background:{color};border-radius:10px;"
+                f"font-size:11px;font-weight:700;padding:2px 8px;border:none;"
+            )
+            hdr.addWidget(count_lbl)
+            lay.addLayout(hdr)
+            sep = QFrame(); sep.setFrameShape(QFrame.Shape.HLine)
+            sep.setStyleSheet("color:#E2E8F0;"); lay.addWidget(sep)
+            items_lay = QVBoxLayout(); items_lay.setSpacing(4)
+            lay.addLayout(items_lay)
+            lay.addStretch()
+            return card, items_lay, count_lbl
+
+        c1, self._al_hv_lay,  self._al_hv_cnt  = _alert_col("Cảnh báo học vụ",   DANGER)
+        c2, self._al_hp_lay,  self._al_hp_cnt  = _alert_col("Học phí quá hạn",   WARNING)
+        c3, self._al_gt_lay,  self._al_gt_cnt  = _alert_col("Thiếu giấy tờ",     INFO)
+        alert_row.addWidget(c1); alert_row.addWidget(c2); alert_row.addWidget(c3)
+        self._root.addLayout(alert_row)
 
     def refresh(self):
         self.run_async(self._ctrl._svc.get_dashboard, self._render)
@@ -252,28 +275,36 @@ class DashboardView(BaseView):
         self._hp_bar.setValue(min(pct, 100))
         self._hp_pct.setText(f"Thu được: {pct}%")
 
-        # Alerts
-        while self._alert_layout.count():
-            item = self._alert_layout.takeAt(0)
-            if item.widget():
-                item.widget().deleteLater()
-
+        # Alerts — 3 loại riêng biệt
         alerts = data.get("alerts", [])
-        if not alerts:
-            lbl = QLabel("Không có cảnh báo nào.")
-            lbl.setStyleSheet("color:#94A3B8;font-size:13px;font-family:Arial;border:none;")
-            self._alert_layout.addWidget(lbl)
-            return
+        by_type = {"hoc_vu": [], "hoc_phi": [], "giay_to": []}
+        for a in alerts:
+            loai = a.get("loai", "")
+            if loai in by_type:
+                by_type[loai].append(a)
 
-        for a in alerts[:6]:
-            row = QFrame()
-            row.setStyleSheet("QFrame{background:#FEF2F2;border-radius:10px;border:1px solid #FECACA;}")
-            rl = QHBoxLayout(row)
-            rl.setContentsMargins(12, 8, 12, 8)
-            dot = QLabel("●")
-            dot.setStyleSheet(f"color:{DANGER};font-size:9px;border:none;")
-            lbl = QLabel(f"<b>{a.get('ho_ten','')}</b> — {a.get('mo_ta','')}")
-            lbl.setStyleSheet("color:#1E293B;font-size:13px;font-family:Arial;border:none;")
-            rl.addWidget(dot)
-            rl.addWidget(lbl)
-            self._alert_layout.addWidget(row)
+        def _fill_col(lay: QVBoxLayout, cnt_lbl, items: list, color: str):
+            while lay.count():
+                item = lay.takeAt(0)
+                if item.widget(): item.widget().deleteLater()
+            cnt_lbl.setText(str(len(items)))
+            if not items:
+                empty = QLabel("Không có")
+                empty.setStyleSheet("color:#94A3B8;font-size:12px;font-family:Arial;border:none;")
+                lay.addWidget(empty)
+                return
+            for a in items[:5]:
+                row = QFrame()
+                row.setStyleSheet(
+                    f"QFrame{{background:{color}11;border:1px solid {color}33;border-radius:7px;}}"
+                )
+                rl = QHBoxLayout(row); rl.setContentsMargins(10, 6, 10, 6); rl.setSpacing(6)
+                dot = QLabel("●"); dot.setStyleSheet(f"color:{color};font-size:9px;border:none;")
+                lbl = QLabel(a.get("ho_ten", ""))
+                lbl.setStyleSheet("color:#1E293B;font-size:12px;font-family:Arial;border:none;font-weight:600;")
+                rl.addWidget(dot); rl.addWidget(lbl, stretch=1)
+                lay.addWidget(row)
+
+        _fill_col(self._al_hv_lay, self._al_hv_cnt, by_type["hoc_vu"],  DANGER)
+        _fill_col(self._al_hp_lay, self._al_hp_cnt, by_type["hoc_phi"], WARNING)
+        _fill_col(self._al_gt_lay, self._al_gt_cnt, by_type["giay_to"], INFO)

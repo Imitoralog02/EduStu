@@ -5,9 +5,10 @@ from PyQt6.QtWidgets import (
     QAbstractItemView, QScrollArea, QCheckBox, QLineEdit,
     QMessageBox, QGraphicsDropShadowEffect, QTextEdit, QDateEdit,
     QDialog, QGridLayout, QComboBox, QFileDialog, QSpinBox,
+    QSizePolicy,
 )
-from PyQt6.QtCore import Qt, QDate
-from PyQt6.QtGui import QFont, QColor
+from PyQt6.QtCore import Qt, QDate, QSize
+from PyQt6.QtGui import QFont, QColor, QPixmap
 from views.base_view import BaseView, QSS_INPUT, make_card
 from controllers.document import DocumentController
 from utils.config import SUCCESS, DANGER, WARNING, TEXT_LIGHT, TEXT_MUTED, BORDER, INFO, PRIMARY, SECONDARY, ACCENT
@@ -102,18 +103,45 @@ class DocumentView(BaseView):
         self._banner_frame = QFrame(); self._banner_frame.setVisible(False)
         self._banner_frame.setStyleSheet("QFrame{background:rgba(239,68,68,0.10);border:1.5px solid rgba(239,68,68,0.35);border-radius:12px;}")
         banner_lay = QVBoxLayout(self._banner_frame); banner_lay.setContentsMargins(14,10,14,10); banner_lay.setSpacing(6)
-        banner_hdr = QHBoxLayout()
+
+        # Header banner
+        banner_hdr = QHBoxLayout(); banner_hdr.setSpacing(8)
+        icon_lbl = QLabel("⚠️"); icon_lbl.setStyleSheet("border:none;font-size:14px;")
         self._banner_title = QLabel("")
         self._banner_title.setStyleSheet(f"color:{DANGER};font-size:13px;font-weight:700;font-family:Arial;border:none;")
-        self._btn_toggle = QPushButton("▼ Xem chi tiết"); self._btn_toggle.setFixedHeight(26); self._btn_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._banner_count = QLabel("")
+        self._banner_count.setStyleSheet(f"color:{DANGER};font-size:12px;font-family:Arial;border:none;")
+        self._btn_toggle = QPushButton("▼ Xem chi tiết")
+        self._btn_toggle.setFixedHeight(26); self._btn_toggle.setCursor(Qt.CursorShape.PointingHandCursor)
         self._btn_toggle.setStyleSheet(f"QPushButton{{background:rgba(239,68,68,0.15);color:{DANGER};border:1px solid rgba(239,68,68,0.3);border-radius:5px;font-size:11px;font-family:Arial;padding:0 10px;}}QPushButton:hover{{background:{DANGER};color:white;}}")
         self._btn_toggle.clicked.connect(self._toggle_banner_detail)
-        banner_hdr.addWidget(QLabel("⚠️")); banner_hdr.addWidget(self._banner_title, stretch=1); banner_hdr.addWidget(self._btn_toggle)
+        banner_hdr.addWidget(icon_lbl)
+        banner_hdr.addWidget(self._banner_title, stretch=1)
+        banner_hdr.addWidget(self._banner_count)
+        banner_hdr.addWidget(self._btn_toggle)
         banner_lay.addLayout(banner_hdr)
-        self._banner_detail = QFrame(); self._banner_detail.setVisible(False)
-        self._banner_detail.setStyleSheet("QFrame{background:transparent;border:none;}")
-        self._banner_detail_lay = QVBoxLayout(self._banner_detail); self._banner_detail_lay.setContentsMargins(0,4,0,0); self._banner_detail_lay.setSpacing(4)
-        banner_lay.addWidget(self._banner_detail)
+
+        # Vùng chi tiết cuộn được, chiều cao giới hạn 220px
+        self._banner_scroll = QScrollArea()
+        self._banner_scroll.setVisible(False)
+        self._banner_scroll.setWidgetResizable(True)
+        self._banner_scroll.setFrameShape(QFrame.Shape.NoFrame)
+        self._banner_scroll.setFixedHeight(220)
+        self._banner_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        self._banner_scroll.setStyleSheet("""
+            QScrollArea { background:transparent; border:none; }
+            QScrollBar:vertical { background:rgba(239,68,68,0.10); width:5px; border-radius:3px; }
+            QScrollBar::handle:vertical { background:rgba(239,68,68,0.45); border-radius:3px; }
+            QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical { height:0px; }
+        """)
+        self._banner_detail = QWidget()
+        self._banner_detail.setStyleSheet("background:transparent;")
+        self._banner_detail_lay = QVBoxLayout(self._banner_detail)
+        self._banner_detail_lay.setContentsMargins(0, 2, 4, 2)
+        self._banner_detail_lay.setSpacing(4)
+        self._banner_detail_lay.addStretch()
+        self._banner_scroll.setWidget(self._banner_detail)
+        banner_lay.addWidget(self._banner_scroll)
         self._root.addWidget(self._banner_frame)
 
         # ── Layout chính ──────────────────────────────────────────────────────
@@ -197,8 +225,8 @@ class DocumentView(BaseView):
         self._filter_list()
 
     def _toggle_banner_detail(self):
-        v = not self._banner_detail.isVisible()
-        self._banner_detail.setVisible(v)
+        v = not self._banner_scroll.isVisible()
+        self._banner_scroll.setVisible(v)
         self._btn_toggle.setText("▲ Thu gọn" if v else "▼ Xem chi tiết")
 
     # ── Data ──────────────────────────────────────────────────────────────────
@@ -221,13 +249,24 @@ class DocumentView(BaseView):
         if thieu:
             self._banner_frame.setVisible(True)
             self._banner_title.setText(f"Có {len(thieu)} sinh viên chưa nộp đủ giấy tờ")
+            self._banner_count.setText(f"({len(thieu)} sinh viên)")
+            # Xóa các card cũ (trừ stretch ở cuối)
             for i in reversed(range(self._banner_detail_lay.count())):
-                w = self._banner_detail_lay.itemAt(i).widget()
-                if w: w.setParent(None)
+                item = self._banner_detail_lay.itemAt(i)
+                w = item.widget() if item else None
+                if w:
+                    w.setParent(None)
             for sv in thieu:
-                self._banner_detail_lay.addWidget(MissingCard(sv, self._select_student_and_scroll))
+                self._banner_detail_lay.insertWidget(
+                    self._banner_detail_lay.count() - 1,
+                    MissingCard(sv, self._select_student_and_scroll)
+                )
+            # Thu gọn lại khi data mới load
+            self._banner_scroll.setVisible(False)
+            self._btn_toggle.setText("▼ Xem chi tiết")
         else:
             self._banner_frame.setVisible(False)
+            self._banner_scroll.setVisible(False)
         self._filter_list()
 
     def _filter_list(self):
@@ -252,7 +291,7 @@ class DocumentView(BaseView):
             self._rows.append(row)
 
     def _select_student_and_scroll(self, mssv, data):
-        self._banner_detail.setVisible(False); self._btn_toggle.setText("▼ Xem chi tiết")
+        self._banner_scroll.setVisible(False); self._btn_toggle.setText("▼ Xem chi tiết")
         self._set_tab("all")
         if self._cmb_khoa.currentIndex() > 0:
             idx = self._cmb_khoa.findText(data.khoa or "")
@@ -304,7 +343,7 @@ class DocumentView(BaseView):
                 file_lbl.setToolTip(f"{d.file_name} ({d.file_size_display})")
                 btn_view = QPushButton("Xem"); btn_view.setFixedHeight(24)
                 btn_view.setStyleSheet(f"QPushButton{{background:{INFO};color:white;border:none;border-radius:4px;font-size:10px;padding:0 8px;}}QPushButton:hover{{background:#1D4ED8;}}")
-                btn_view.clicked.connect(lambda _, doc=d: self._ctrl.open_file(doc.id))
+                btn_view.clicked.connect(lambda _, doc=d: self._preview_file(doc))
                 btn_dl = QPushButton("⬇"); btn_dl.setFixedSize(24, 24)
                 btn_dl.setToolTip("Tải về máy")
                 btn_dl.setStyleSheet(f"QPushButton{{background:transparent;color:{SUCCESS};border:1px solid {SUCCESS};border-radius:4px;font-size:10px;}}QPushButton:hover{{background:{SUCCESS};color:white;}}")
@@ -336,11 +375,21 @@ class DocumentView(BaseView):
         dlg.exec()
 
     def _save_doc(self, doc_id, da_nop, ngay_nop, ghi_chu):
-        def ok(_):
-            if self._selected_mssv:
-                self.run_async(lambda: self._ctrl._svc.get_docs(self._selected_mssv), self._render_docs)
-            self.run_async(self._ctrl._svc.get_summary, self._render_list)
-        self.run_async(lambda: self._ctrl._svc.update_doc(doc_id, da_nop, ngay_nop, ghi_chu), ok, loading_text="Đang lưu...")
+        def reload_docs(_):
+            if not self._selected_mssv:
+                return
+            def reload_summary(_docs):
+                self._render_docs(_docs)
+                self.run_async(self._ctrl._svc.get_summary, self._render_list)
+            self.run_async(
+                lambda: self._ctrl._svc.get_docs(self._selected_mssv),
+                reload_summary,
+            )
+        self.run_async(
+            lambda: self._ctrl._svc.update_doc(doc_id, da_nop, ngay_nop, ghi_chu),
+            reload_docs,
+            loading_text="Đang lưu...",
+        )
 
     def _upload_file(self, doc):
         path, _ = QFileDialog.getOpenFileName(
@@ -350,9 +399,12 @@ class DocumentView(BaseView):
         if not path: return
 
         def ok(updated_doc):
-            QMessageBox.information(self, "Thành công", f"Đã tải lên file:\n{updated_doc.file_name}")
+            QMessageBox.information(self, "Thành công", f"Đã tải lên file:\n{updated_doc.file_name}\nTrạng thái đã được cập nhật thành Đã nộp.")
             if self._selected_mssv:
-                self.run_async(lambda: self._ctrl._svc.get_docs(self._selected_mssv), self._render_docs)
+                def reload_summary(_docs):
+                    self._render_docs(_docs)
+                    self.run_async(self._ctrl._svc.get_summary, self._render_list)
+                self.run_async(lambda: self._ctrl._svc.get_docs(self._selected_mssv), reload_summary)
 
         def err(msg): QMessageBox.warning(self, "Lỗi tải file", msg)
         self._ctrl.upload_file(doc.id, path, on_success=ok, on_error=err)
@@ -367,6 +419,29 @@ class DocumentView(BaseView):
                 self.run_async(lambda: self._ctrl._svc.get_docs(self._selected_mssv), self._render_docs)
 
         self._ctrl.delete_file(doc.id, on_success=ok, on_error=lambda msg: QMessageBox.warning(self, "Lỗi", msg))
+
+    def _preview_file(self, doc):
+        """Xem trước file: ảnh hiển thị ngay trong app, file khác mở bằng ứng dụng hệ thống."""
+        mime = (doc.mime_type or "").lower()
+        is_image = any(mime.startswith(t) for t in ("image/jpeg", "image/png", "image/gif", "image/bmp", "image/webp"))
+
+        def ok(raw: bytes):
+            if is_image:
+                FilePreviewDialog(doc.file_name or "file", raw, parent=self).exec()
+            else:
+                # Không phải ảnh — ghi tạm ra temp rồi mở
+                import tempfile, os, pathlib
+                suffix = pathlib.Path(doc.file_name or "file").suffix or ".tmp"
+                with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as f:
+                    f.write(raw)
+                    tmp_path = f.name
+                try:
+                    os.startfile(tmp_path)
+                except Exception as e:
+                    QMessageBox.warning(self, "Không thể mở", str(e))
+
+        self._ctrl.download_file(doc.id, on_success=ok,
+                                 on_error=lambda msg: QMessageBox.warning(self, "Lỗi tải file", msg))
 
     def _download_file(self, doc):
         save_path, _ = QFileDialog.getSaveFileName(
@@ -615,3 +690,64 @@ class DocUpdateDialog(QDialog):
         ghi_chu = self._note.toPlainText().strip() or None
         self._on_save(da_nop=da_nop, ngay_nop=ngay, ghi_chu=ghi_chu)
         self.accept()
+
+
+# ── Dialog xem trước file ảnh ─────────────────────────────────────────────────
+class FilePreviewDialog(QDialog):
+    """Hiển thị ảnh trực tiếp trong app (JPEG, PNG, GIF, BMP, WEBP)."""
+
+    MAX_W = 900
+    MAX_H = 680
+
+    def __init__(self, file_name: str, raw: bytes, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle(f"Xem trước — {file_name}")
+        self.setStyleSheet("background:#1E293B;")
+        self._build(raw, file_name)
+
+    def _build(self, raw: bytes, file_name: str):
+        root = QVBoxLayout(self)
+        root.setContentsMargins(12, 12, 12, 12)
+        root.setSpacing(8)
+
+        # Tên file
+        name_lbl = QLabel(file_name)
+        name_lbl.setStyleSheet("color:#94A3B8;font-size:12px;font-family:Arial;border:none;")
+        name_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        root.addWidget(name_lbl)
+
+        # Ảnh
+        pixmap = QPixmap()
+        pixmap.loadFromData(raw)
+
+        if pixmap.isNull():
+            err = QLabel("Không thể hiển thị ảnh này.")
+            err.setStyleSheet("color:#FCA5A5;font-size:14px;font-family:Arial;border:none;")
+            err.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            root.addWidget(err)
+        else:
+            scaled = pixmap.scaled(
+                QSize(self.MAX_W, self.MAX_H),
+                Qt.AspectRatioMode.KeepAspectRatio,
+                Qt.TransformationMode.SmoothTransformation,
+            )
+            img_lbl = QLabel()
+            img_lbl.setPixmap(scaled)
+            img_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            img_lbl.setStyleSheet("border:none;background:transparent;")
+            root.addWidget(img_lbl)
+            self.resize(scaled.width() + 24, scaled.height() + 80)
+
+        # Nút đóng
+        btn_close = QPushButton("Đóng")
+        btn_close.setFixedHeight(34)
+        btn_close.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_close.setStyleSheet(
+            "QPushButton{background:transparent;color:#94A3B8;border:1px solid #475569;"
+            "border-radius:7px;font-size:13px;padding:0 24px;}"
+            "QPushButton:hover{color:#F1F5F9;border-color:#94A3B8;}"
+        )
+        btn_close.clicked.connect(self.accept)
+        btn_row = QHBoxLayout()
+        btn_row.addStretch(); btn_row.addWidget(btn_close); btn_row.addStretch()
+        root.addLayout(btn_row)

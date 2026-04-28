@@ -12,11 +12,9 @@ NAV_ITEMS = [
     ("dashboard", "  Dashboard",   "admin phongdt giaovien"),
     ("sinhvien",  "  Sinh viên",   "admin phongdt"),
     ("hocphan",   "  Học phần",    "admin phongdt giaovien"),
-    ("diem",      "  Điểm số",     "admin phongdt giaovien"),
     ("hocphi",    "  Học phí",     "admin phongdt"),
     ("giayto",    "  Giấy tờ",     "admin phongdt"),
     ("baocao",    "  Báo cáo",     "admin phongdt"),
-    # enrollment_view đã bị loại bỏ
 ]
 
 
@@ -181,7 +179,6 @@ class MainWindow(QMainWindow):
             "dashboard": lambda: __import__("views.dashboard_view", fromlist=["DashboardView"]).DashboardView(),
             "sinhvien":  lambda: __import__("views.student_view",   fromlist=["StudentView"]).StudentView(),
             "hocphan":   lambda: __import__("views.course_view",    fromlist=["CourseView"]).CourseView(),
-            "diem":      lambda: __import__("views.grade_view",     fromlist=["GradeView"]).GradeView(),
             "hocphi":    lambda: __import__("views.tuition_view",   fromlist=["TuitionView"]).TuitionView(),
             "giayto":    lambda: __import__("views.document_view",  fromlist=["DocumentView"]).DocumentView(),
             "baocao":    lambda: __import__("views.report_view",    fromlist=["ReportView"]).ReportView(),

@@ -94,6 +94,7 @@ def update_doc(db: Session, doc_id: int, da_nop: bool, ngay_nop, ghi_chu) -> Stu
 
 
 async def upload_doc_file(db: Session, doc_id: int, file: UploadFile) -> StudentDocument:
+    from datetime import date as _date
     doc = db.query(StudentDocument).filter(StudentDocument.id == doc_id).first()
     if not doc:
         raise HTTPException(status_code=404, detail="Không tìm thấy giấy tờ")
@@ -124,6 +125,10 @@ async def upload_doc_file(db: Session, doc_id: int, file: UploadFile) -> Student
     doc.file_name = file.filename
     doc.file_size = file_size
     doc.mime_type = file.content_type
+    # Tự động đánh dấu đã nộp khi có file
+    doc.da_nop   = True
+    if not doc.ngay_nop:
+        doc.ngay_nop = _date.today()
     db.commit()
     db.refresh(doc)
     return doc
