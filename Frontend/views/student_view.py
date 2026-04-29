@@ -15,11 +15,7 @@ from utils.config import (
     TRANG_THAI_SV, KHOA_LIST, GIOI_TINH, SUCCESS, DANGER, WARNING, INFO,
 )
 from utils.helpers import fmt_date, badge_color, fmt_gpa
-
-LOAI_GIAY_YEU_CAU = [
-    "CCCD/CMND", "Giấy khai sinh", "Học bạ THPT",
-    "Bằng tốt nghiệp THPT", "Ảnh thẻ 3x4", "Sổ hộ khẩu",
-]
+from views.document_view import LOAI_GIAY_YEU_CAU, show_required_docs_notice, StudentDocTab
 
 COLS = ["MSSV", "Họ và tên", "Lớp", "Khoa", "Ngày sinh", "Trạng thái", "Thao tác"]
 
@@ -218,7 +214,6 @@ class StudentView(BaseView):
             hl.setContentsMargins(4, 2, 4, 2)
             hl.setSpacing(4)
             for txt, fn, clr in [
-                ("Xem",  lambda _, m=mssv: self._open_profile(m), SUCCESS),
                 ("Sửa",  lambda _, m=mssv: self._open_edit(m),    ACCENT),
                 ("Xóa",  lambda _, m=mssv: self._delete(m),       DANGER),
             ]:
@@ -248,20 +243,11 @@ class StudentView(BaseView):
         c.setStyleSheet(QSS_INPUT)
         return c
 
-    def _open_profile(self, mssv: str):
-        try:
-            raw = self._ctrl._svc.get_by_mssv(mssv)
-        except Exception as e:
-            QMessageBox.warning(self, "Lỗi", str(e))
-            return
-        dlg = StudentProfileDialog(data=raw)
-        dlg.exec()
-
     def _open_add(self):
         def _after_save():
             self._load_khoa_list()
             self._load()
-            _show_required_docs_notice(self)
+            show_required_docs_notice(self)
 
         dlg = StudentForm(on_save=_after_save, khoa_list=self._khoa_list)
         dlg.exec()
@@ -479,21 +465,6 @@ class StudentForm(QDialog):
             self._ctrl.create(data, on_success=ok, on_error=err)
 
 
-def _show_required_docs_notice(parent):
-    """Show popup listing all required documents after adding a new student."""
-    msg = QMessageBox(parent)
-    msg.setWindowTitle("Thông báo hồ sơ nhập học")
-    msg.setIcon(QMessageBox.Icon.Information)
-    docs_list = "\n".join(f"  • {d}" for d in LOAI_GIAY_YEU_CAU)
-    msg.setText(
-        "Sinh viên mới đã được thêm thành công!\n\n"
-        "Yêu cầu nộp các giấy tờ hồ sơ sau:\n\n"
-        f"{docs_list}\n\n"
-        "Vui lòng cập nhật tình trạng nộp hồ sơ trong mục Giấy tờ."
-    )
-    msg.exec()
-
-
 # ══════════════════════════════════════════════════════════════════════════════
 # Dialog: Hồ sơ sinh viên đầy đủ — 4 tabs
 # ══════════════════════════════════════════════════════════════════════════════
@@ -502,34 +473,301 @@ class StudentProfileDialog(QDialog):
 
     def __init__(self, data: dict):
         super().__init__()
-        self._data = data
-        mssv   = data.get("mssv", "")
-        ho_ten = data.get("ho_ten", "Sinh viên")
-        self.setWindowTitle(f"Hồ sơ sinh viên — {ho_ten}")
+        self._data   = data
+        self._mssv   = data.get("mssv", "")
+        self._workers: list = []
+
+        self.setWindowTitle(f"Hồ sơ sinh viên — {data.get('ho_ten', 'Sinh viên')}")
         self.setMinimumSize(820, 640)
         self.setStyleSheet("background:#FFFFFF; color:#1E293B; font-family:Arial;")
 
-        # Load all data synchronously (dialog is modal)
-        from controllers.document import DocumentService
+        # Dữ liệu mặc định rỗng — sẽ được điền sau khi load async
+        self._transcript  = {}
+        self._tuition     = None
+        self._status_logs = []
+
+        # Build UI ngay lập tức (hiện dialog không chờ API)
+        self._build(data)
+
+        # Kick-off 4 API calls song song sau khi event loop chạy
+        QTimer.singleShot(0, self._load_async)
+
+    # ── Async loading ────────────────────────────────────────────────────────
+
+    def _load_async(self):
+        from controllers.base import ApiWorker
         from controllers.grade import GradeService
         from controllers.tuition import TuitionService
+        from controllers.base import APIClient
 
-        try:
-            self._docs = DocumentService().get_docs(mssv) or []
-        except Exception:
-            self._docs = []
-        try:
-            self._transcript = GradeService().get_transcript(mssv, "")
-        except Exception:
-            self._transcript = {}
-        try:
-            raw_tuition = TuitionService().get_list(search=mssv)
-            items = raw_tuition if isinstance(raw_tuition, list) else raw_tuition.get("items", [])
-            self._tuition = next((t for t in items if t.get("mssv") == mssv), None)
-        except Exception:
-            self._tuition = None
+        mssv = self._mssv
 
-        self._build(data)
+        def _run(fn, on_ok, on_err=None):
+            w = ApiWorker(fn)
+            w.success.connect(on_ok)
+            if on_err:
+                w.error.connect(on_err)
+            w.start()
+            self._workers.append(w)
+
+        self._doc_tab.load()
+
+        _run(lambda: GradeService().get_transcript(mssv, ""),
+             self._on_transcript_loaded)
+
+        _run(lambda: self._fetch_tuition(TuitionService, mssv),
+             self._on_tuition_loaded)
+
+        _run(lambda: APIClient().get(f"/sinhvien/{mssv}/lichsu-trangthai") or [],
+             self._on_logs_loaded)
+
+    @staticmethod
+    def _fetch_tuition(svc_cls, mssv: str):
+        raw = svc_cls().get_list(search=mssv)
+        items = raw if isinstance(raw, list) else raw.get("items", [])
+        return next((t for t in items if t.get("mssv") == mssv), None)
+
+    # ── Populate callbacks (chạy trên main thread qua signal) ────────────────
+
+    def _on_transcript_loaded(self, transcript):
+        self._transcript = transcript or {}
+        self._populate_grades()
+
+    def _on_tuition_loaded(self, tuition):
+        self._tuition = tuition
+        self._populate_tuition()
+
+    def _on_logs_loaded(self, logs):
+        self._status_logs = logs or []
+        self._populate_logs()
+
+    # ── Helper: xóa sạch layout và điền nội dung mới ────────────────────────
+
+    @staticmethod
+    def _clear_layout(layout):
+        while layout.count():
+            item = layout.takeAt(0)
+            w = item.widget()
+            if w:
+                w.deleteLater()
+            elif item.layout():
+                StudentProfileDialog._clear_layout(item.layout())
+
+    # ── Populate: Bảng điểm ─────────────────────────────────────────────────
+
+    def _populate_grades(self):
+        lay = self._grades_content_lay
+        self._clear_layout(lay)
+
+        gpa = self._transcript.get("gpa_tich_luy")
+        xl  = self._transcript.get("xep_loai", "—")
+        tc  = self._transcript.get("tin_chi_dat", 0)
+        cb  = self._transcript.get("canh_bao", "")
+
+        summary_frame = QFrame()
+        summary_frame.setStyleSheet(
+            "QFrame{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;}"
+        )
+        sf = QHBoxLayout(summary_frame)
+        sf.setContentsMargins(16, 10, 16, 10); sf.setSpacing(30)
+        for lbl_txt, val_txt, clr in [
+            ("GPA tích lũy", fmt_gpa(gpa), ACCENT if gpa and gpa >= 5 else DANGER),
+            ("Xếp loại",     xl,            SUCCESS),
+            ("TC tích lũy",  str(tc),       "#6366F1"),
+        ]:
+            col = QVBoxLayout(); col.setSpacing(2)
+            lv = QLabel(lbl_txt); lv.setStyleSheet(f"color:{TEXT_MUTED};font-size:11px;border:none;")
+            vv = QLabel(val_txt); vv.setFont(QFont("Arial", 15, QFont.Weight.Bold))
+            vv.setStyleSheet(f"color:{clr};border:none;")
+            col.addWidget(lv); col.addWidget(vv)
+            sf.addLayout(col)
+        if cb:
+            cb_lbl = QLabel(f"⚠ {cb}")
+            cb_lbl.setStyleSheet(
+                f"color:{DANGER};font-size:12px;font-weight:600;border:none;"
+                f"background:rgba(239,68,68,0.1);border-radius:6px;padding:4px 10px;"
+            )
+            sf.addWidget(cb_lbl)
+        sf.addStretch()
+        lay.addWidget(summary_frame)
+
+        grade_cols = ["Mã HP", "Tên học phần", "TC", "Giữa kỳ", "Cuối kỳ", "Tổng kết", "Xếp loại", "Kết quả"]
+        tbl = QTableWidget()
+        tbl.setColumnCount(len(grade_cols))
+        tbl.setHorizontalHeaderLabels(grade_cols)
+        tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tbl.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        tbl.verticalHeader().setVisible(False)
+        tbl.horizontalHeader().setStretchLastSection(False)
+        tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
+        tbl.setAlternatingRowColors(True)
+        tbl.setStyleSheet(QSS_TABLE)
+        tbl.verticalHeader().setDefaultSectionSize(36)
+        for i, w_col in enumerate([80, 0, 36, 76, 76, 76, 80, 72]):
+            if w_col: tbl.setColumnWidth(i, w_col)
+
+        from models.grade import Grade as GradeModel
+        diem_list = self._transcript.get("diem_list", [])
+        tbl.setRowCount(max(len(diem_list), 1))
+        if diem_list:
+            for row, d in enumerate(diem_list):
+                g = GradeModel.from_dict(d)
+                tbl.setItem(row, 0, _tbl_item(g.ma_hp))
+                tbl.setItem(row, 1, _tbl_item(g.ten_hp, bold=True))
+                tbl.setItem(row, 2, _tbl_item(str(g.so_tin_chi), center=True))
+                tbl.setItem(row, 3, _tbl_item(g.diem_gk_display, center=True))
+                tbl.setItem(row, 4, _tbl_item(g.diem_ck_display, center=True))
+                it = _tbl_item(g.tong_ket_display, center=True, bold=True)
+                it.setForeground(QColor(SUCCESS if g.dat else DANGER))
+                tbl.setItem(row, 5, it)
+                tbl.setItem(row, 6, _tbl_item(_xep_loai_mon(g.tong_ket), center=True))
+                tbl.setItem(row, 7, _tbl_item(g.ket_qua, center=True))
+        else:
+            tbl.setItem(0, 0, _tbl_item("Chưa có dữ liệu điểm"))
+
+        self._grade_table_ref = tbl
+        lay.addWidget(tbl)
+
+        from controllers.grade import GradeController as GC
+        mssv = self._mssv
+        btn_nhap = QPushButton("+ Nhập điểm mới")
+        btn_nhap.setFixedHeight(34)
+        btn_nhap.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn_nhap.setStyleSheet(
+            f"QPushButton{{background:{ACCENT};color:white;border:none;border-radius:7px;"
+            f"font-size:13px;font-weight:600;padding:0 18px;}}"
+            f"QPushButton:hover{{background:#1D4ED8;}}"
+        )
+        def _open_grade_form():
+            from views.grade_view import GradeForm
+            GradeForm(mssv=mssv, on_save=lambda: self._reload_grades()).exec()
+        btn_nhap.clicked.connect(_open_grade_form)
+        btn_row = QHBoxLayout(); btn_row.addStretch(); btn_row.addWidget(btn_nhap)
+        lay.addLayout(btn_row)
+
+    def _reload_grades(self):
+        from controllers.grade import GradeService
+        from controllers.base import ApiWorker
+        def _fetch():
+            return GradeService().get_transcript(self._mssv, "")
+        w = ApiWorker(_fetch)
+        w.success.connect(self._on_transcript_loaded)
+        w.start()
+        self._workers.append(w)
+
+    # ── Populate: Học phí ────────────────────────────────────────────────────
+
+    def _populate_tuition(self):
+        lay = self._tuition_content_lay
+        self._clear_layout(lay)
+
+        if not self._tuition:
+            lay.addWidget(self._no_data_lbl("Chưa có thông tin học phí."))
+            lay.addStretch()
+            return
+
+        t = self._tuition
+        phai_nop  = t.get("phai_nop", 0) or 0
+        mien_giam = t.get("mien_giam", 0) or 0
+        da_nop    = t.get("da_nop", 0) or 0
+        actual    = max(0, phai_nop - mien_giam)
+        con_thieu = max(0, actual - da_nop)
+        trang_thai = t.get("trang_thai", "")
+        han_nop    = t.get("han_nop", "")
+
+        tt_clr = {
+            "Đã nộp": SUCCESS, "Nộp thiếu": WARNING,
+            "Chưa nộp": DANGER, "Quá hạn": DANGER,
+        }.get(trang_thai, TEXT_MUTED)
+
+        status_frame = QFrame()
+        status_frame.setStyleSheet(
+            f"QFrame{{background:{tt_clr}22;border:1.5px solid {tt_clr}55;border-radius:10px;}}"
+        )
+        sf = QHBoxLayout(status_frame); sf.setContentsMargins(20, 14, 20, 14)
+        st_lbl = QLabel(f"Trạng thái: {trang_thai}")
+        st_lbl.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        st_lbl.setStyleSheet(f"color:{tt_clr};border:none;")
+        sf.addWidget(st_lbl); sf.addStretch()
+        if han_nop:
+            hn_lbl = QLabel(f"Hạn nộp: {han_nop}")
+            hn_lbl.setStyleSheet(f"color:{TEXT_MUTED};font-size:13px;border:none;")
+            sf.addWidget(hn_lbl)
+        lay.addWidget(status_frame)
+
+        def _money_row(label, amount, color):
+            f = QFrame()
+            f.setStyleSheet("QFrame{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;}")
+            fl = QHBoxLayout(f); fl.setContentsMargins(18, 12, 18, 12)
+            lbl = QLabel(label)
+            lbl.setStyleSheet(f"color:{TEXT_MUTED};font-size:13px;font-weight:600;border:none;")
+            val = QLabel(f"{int(amount):,} ₫")
+            val.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+            val.setStyleSheet(f"color:{color};border:none;")
+            fl.addWidget(lbl); fl.addStretch(); fl.addWidget(val)
+            lay.addWidget(f)
+
+        _money_row("Phải nộp (sau miễn giảm)", actual, "#2563EB")
+        _money_row("Đã nộp", da_nop, SUCCESS)
+        _money_row("Còn thiếu", con_thieu, DANGER if con_thieu > 0 else SUCCESS)
+
+        if mien_giam > 0:
+            note = QLabel(
+                f"Miễn giảm: {int(mien_giam):,} ₫  —  "
+                f"{t.get('ly_do_mien_giam') or 'Không ghi lý do'}"
+            )
+            note.setStyleSheet(f"color:{TEXT_MUTED};font-size:12px;font-family:Arial;border:none;")
+            lay.addWidget(note)
+        lay.addStretch()
+
+    # ── Populate: Lịch sử trạng thái ────────────────────────────────────────
+
+    def _populate_logs(self):
+        lay = self._log_content_lay
+        self._clear_layout(lay)
+
+        if not self._status_logs:
+            no_log = QLabel("Chưa có thay đổi trạng thái nào được ghi nhận.")
+            no_log.setStyleSheet(f"color:{TEXT_MUTED};font-size:12px;font-family:Arial;border:none;")
+            lay.addWidget(no_log)
+            return
+
+        clr_map = {"Đang học": SUCCESS, "Thôi học": DANGER,
+                   "Bảo lưu": WARNING, "Cảnh báo": WARNING}
+        for log in self._status_logs:
+            row_frame = QFrame()
+            row_frame.setStyleSheet(
+                "QFrame{background:#F8FAFC;border:1px solid #E2E8F0;"
+                "border-radius:8px;margin-bottom:4px;}"
+            )
+            outer = QVBoxLayout(row_frame); outer.setContentsMargins(12, 8, 12, 8); outer.setSpacing(3)
+            rl = QHBoxLayout(); rl.setSpacing(10)
+
+            cu  = log.get("trang_thai_cu") or "—"
+            moi = log.get("trang_thai_moi", "")
+            arrow = QLabel(f"{cu}  →  ")
+            arrow.setStyleSheet(f"color:{TEXT_MUTED};font-size:12px;font-family:Arial;border:none;")
+            moi_lbl = QLabel(moi)
+            moi_lbl.setStyleSheet(
+                f"color:{clr_map.get(moi, TEXT_MUTED)};font-size:12px;"
+                f"font-weight:700;font-family:Arial;border:none;"
+            )
+            time_str = (log.get("thoi_gian") or "")[:16].replace("T", " ")
+            meta = log.get("nguoi_thay_doi") or ""
+            detail = QLabel(f"{time_str}{'  ·  ' + meta if meta else ''}")
+            detail.setStyleSheet(f"color:{TEXT_MUTED};font-size:11px;font-family:Arial;border:none;")
+
+            rl.addWidget(arrow); rl.addWidget(moi_lbl); rl.addStretch(); rl.addWidget(detail)
+            outer.addLayout(rl)
+
+            ly_do = log.get("ly_do") or ""
+            if ly_do:
+                ly_lbl = QLabel(f"Lý do: {ly_do}")
+                ly_lbl.setStyleSheet(
+                    "color:#475569;font-size:11px;font-style:italic;font-family:Arial;border:none;"
+                )
+                outer.addWidget(ly_lbl)
+            lay.addWidget(row_frame)
 
     def _build(self, d: dict):
         root = QVBoxLayout(self)
@@ -646,19 +884,11 @@ class StudentProfileDialog(QDialog):
         scroll.setStyleSheet("QScrollArea{background:#FFFFFF;border:none;}")
         body = QWidget(); body.setStyleSheet("background:#FFFFFF;")
         bl = QVBoxLayout(body)
-        bl.setContentsMargins(24, 18, 24, 18)
-        bl.setSpacing(0)
+        bl.setContentsMargins(24, 18, 24, 18); bl.setSpacing(0)
 
-        # Missing docs alert
-        missing = [doc for doc in self._docs if not doc.da_nop]
-        if missing:
-            alert = QFrame()
-            alert.setStyleSheet("QFrame{background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;margin-bottom:8px;}")
-            al = QHBoxLayout(alert); al.setContentsMargins(14, 10, 14, 10)
-            al.addWidget(QLabel(f"⚠  Còn thiếu {len(missing)} giấy tờ: {', '.join(doc.loai_giay for doc in missing)}").also(
-                lambda lb: lb.setStyleSheet("color:#DC2626;font-size:12px;font-weight:600;border:none;font-family:Arial;")
-            ) if False else self._warn_lbl(missing))
-            bl.addWidget(alert)
+        # Placeholder alert giấy tờ — sẽ bị _populate_docs cập nhật
+        self._doc_alert_container = QVBoxLayout()
+        bl.addLayout(self._doc_alert_container)
 
         self._section(bl, "Thông tin cơ bản")
         for label, value in [
@@ -691,6 +921,12 @@ class StudentProfileDialog(QDialog):
         ]:
             self._info_row(bl, label, value)
 
+        self._sep(bl)
+        self._section(bl, "Lịch sử trạng thái")
+        self._log_content_lay = QVBoxLayout()
+        self._log_content_lay.addWidget(self._loading_label())
+        bl.addLayout(self._log_content_lay)
+
         bl.addStretch()
         scroll.setWidget(body)
         return scroll
@@ -698,222 +934,25 @@ class StudentProfileDialog(QDialog):
     # ── Tab 2: Bảng điểm ─────────────────────────────────────────────────
     def _build_tab_grades(self) -> QWidget:
         w = QWidget(); w.setStyleSheet("background:#FFFFFF;")
-        lay = QVBoxLayout(w); lay.setContentsMargins(16, 12, 16, 12); lay.setSpacing(10)
-
-        # Summary bar
-        summary_frame = QFrame()
-        summary_frame.setStyleSheet(
-            f"QFrame{{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;}}"
-        )
-        sf = QHBoxLayout(summary_frame); sf.setContentsMargins(16, 10, 16, 10); sf.setSpacing(30)
-        items_data = self._transcript
-        gpa  = items_data.get("gpa_tich_luy")
-        xl   = items_data.get("xep_loai", "—")
-        tc   = items_data.get("tin_chi_dat", 0)
-        cb   = items_data.get("canh_bao", "")
-
-        for lbl_txt, val_txt, clr in [
-            ("GPA tích lũy", fmt_gpa(gpa), ACCENT if gpa and gpa >= 5 else DANGER),
-            ("Xếp loại",     xl,            SUCCESS),
-            ("TC tích lũy",  str(tc),       "#6366F1"),
-        ]:
-            col = QVBoxLayout(); col.setSpacing(2)
-            lv = QLabel(lbl_txt); lv.setStyleSheet(f"color:{TEXT_MUTED};font-size:11px;border:none;")
-            vv = QLabel(val_txt); vv.setFont(QFont("Arial", 15, QFont.Weight.Bold))
-            vv.setStyleSheet(f"color:{clr};border:none;")
-            col.addWidget(lv); col.addWidget(vv)
-            sf.addLayout(col)
-        if cb:
-            cb_lbl = QLabel(f"⚠ {cb}")
-            cb_lbl.setStyleSheet(f"color:{DANGER};font-size:12px;font-weight:600;border:none;background:rgba(239,68,68,0.1);border-radius:6px;padding:4px 10px;")
-            sf.addWidget(cb_lbl)
-        sf.addStretch()
-        lay.addWidget(summary_frame)
-
-        # Bảng điểm
-        grade_cols = ["Mã HP", "Tên học phần", "TC", "Giữa kỳ", "Cuối kỳ", "Tổng kết", "Xếp loại", "Kết quả"]
-        tbl = QTableWidget()
-        tbl.setColumnCount(len(grade_cols))
-        tbl.setHorizontalHeaderLabels(grade_cols)
-        tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        tbl.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        tbl.verticalHeader().setVisible(False)
-        tbl.horizontalHeader().setStretchLastSection(False)
-        tbl.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.Stretch)
-        tbl.setAlternatingRowColors(True)
-        tbl.setStyleSheet(QSS_TABLE)
-        tbl.verticalHeader().setDefaultSectionSize(36)
-        for i, w_col in enumerate([80, 0, 36, 76, 76, 76, 80, 72]):
-            if w_col: tbl.setColumnWidth(i, w_col)
-
-        from models.grade import Grade as GradeModel
-        diem_list = self._transcript.get("diem_list", [])
-        tbl.setRowCount(len(diem_list))
-        for row, d in enumerate(diem_list):
-            g = GradeModel.from_dict(d)
-            tbl.setItem(row, 0, _tbl_item(g.ma_hp))
-            tbl.setItem(row, 1, _tbl_item(g.ten_hp, bold=True))
-            tbl.setItem(row, 2, _tbl_item(str(g.so_tin_chi), center=True))
-            tbl.setItem(row, 3, _tbl_item(g.diem_gk_display, center=True))
-            tbl.setItem(row, 4, _tbl_item(g.diem_ck_display, center=True))
-            it = _tbl_item(g.tong_ket_display, center=True, bold=True)
-            it.setForeground(QColor(SUCCESS if g.dat else DANGER))
-            tbl.setItem(row, 5, it)
-            tbl.setItem(row, 6, _tbl_item(_xep_loai_mon(g.tong_ket), center=True))
-            tbl.setItem(row, 7, _tbl_item(g.ket_qua, center=True))
-        if not diem_list:
-            tbl.setRowCount(1)
-            tbl.setItem(0, 0, _tbl_item("Chưa có dữ liệu điểm"))
-        lay.addWidget(tbl)
-
-        # Nhập điểm button
-        from controllers.grade import GradeController as GC
-        mssv = self._data.get("mssv", "")
-        btn_nhap = QPushButton("+ Nhập điểm mới")
-        btn_nhap.setFixedHeight(34)
-        btn_nhap.setCursor(Qt.CursorShape.PointingHandCursor)
-        btn_nhap.setStyleSheet(
-            f"QPushButton{{background:{ACCENT};color:white;border:none;border-radius:7px;"
-            f"font-size:13px;font-weight:600;padding:0 18px;}}"
-            f"QPushButton:hover{{background:#1D4ED8;}}"
-        )
-        def _open_grade_form():
-            from views.grade_view import GradeForm
-            def _reload():
-                try:
-                    self._transcript = GC()._svc.get_transcript(mssv, "")
-                except Exception:
-                    pass
-                # Rebuild tab — simple approach: close and reopen not ideal, just refresh table
-                diem_list2 = self._transcript.get("diem_list", [])
-                from models.grade import Grade as GM2
-                tbl.setRowCount(len(diem_list2))
-                for r2, d2 in enumerate(diem_list2):
-                    g2 = GM2.from_dict(d2)
-                    tbl.setItem(r2, 0, _tbl_item(g2.ma_hp))
-                    tbl.setItem(r2, 1, _tbl_item(g2.ten_hp, bold=True))
-                    tbl.setItem(r2, 2, _tbl_item(str(g2.so_tin_chi), center=True))
-                    tbl.setItem(r2, 3, _tbl_item(g2.diem_gk_display, center=True))
-                    tbl.setItem(r2, 4, _tbl_item(g2.diem_ck_display, center=True))
-                    tbl.setItem(r2, 5, _tbl_item(g2.tong_ket_display, center=True))
-                    tbl.setItem(r2, 6, _tbl_item(_xep_loai_mon(g2.tong_ket), center=True))
-                    tbl.setItem(r2, 7, _tbl_item(g2.ket_qua, center=True))
-            GradeForm(mssv=mssv, on_save=_reload).exec()
-        btn_nhap.clicked.connect(_open_grade_form)
-        btn_row = QHBoxLayout(); btn_row.addStretch(); btn_row.addWidget(btn_nhap)
-        lay.addLayout(btn_row)
+        self._grades_content_lay = QVBoxLayout(w)
+        self._grades_content_lay.setContentsMargins(16, 12, 16, 12)
+        self._grades_content_lay.setSpacing(10)
+        self._grades_content_lay.addWidget(self._loading_label())
         return w
 
     # ── Tab 3: Học phí ────────────────────────────────────────────────────
     def _build_tab_tuition(self) -> QWidget:
         w = QWidget(); w.setStyleSheet("background:#FFFFFF;")
-        lay = QVBoxLayout(w); lay.setContentsMargins(24, 20, 24, 20); lay.setSpacing(14)
-
-        if not self._tuition:
-            msg = QLabel("Chưa có thông tin học phí.")
-            msg.setStyleSheet(f"color:{TEXT_MUTED};font-size:13px;font-family:Arial;")
-            lay.addWidget(msg); lay.addStretch(); return w
-
-        t = self._tuition
-        phai_nop  = t.get("phai_nop", 0) or 0
-        mien_giam = t.get("mien_giam", 0) or 0
-        da_nop    = t.get("da_nop", 0) or 0
-        actual    = max(0, phai_nop - mien_giam)
-        con_thieu = max(0, actual - da_nop)
-        trang_thai= t.get("trang_thai", "")
-        han_nop   = t.get("han_nop", "")
-
-        tt_clr = {
-            "Đã nộp": SUCCESS, "Nộp thiếu": WARNING,
-            "Chưa nộp": DANGER, "Quá hạn": DANGER,
-        }.get(trang_thai, TEXT_MUTED)
-
-        # Status badge
-        status_frame = QFrame()
-        status_frame.setStyleSheet(
-            f"QFrame{{background:{tt_clr}22;border:1.5px solid {tt_clr}55;border-radius:10px;}}"
-        )
-        sf = QHBoxLayout(status_frame); sf.setContentsMargins(20, 14, 20, 14)
-        st_lbl = QLabel(f"Trạng thái: {trang_thai}")
-        st_lbl.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-        st_lbl.setStyleSheet(f"color:{tt_clr};border:none;")
-        sf.addWidget(st_lbl); sf.addStretch()
-        if han_nop:
-            hn_lbl = QLabel(f"Hạn nộp: {han_nop}")
-            hn_lbl.setStyleSheet(f"color:{TEXT_MUTED};font-size:13px;border:none;")
-            sf.addWidget(hn_lbl)
-        lay.addWidget(status_frame)
-
-        # Các dòng số tiền
-        def _money_row(label, amount, color):
-            f = QFrame()
-            f.setStyleSheet(f"QFrame{{background:#F8FAFC;border:1px solid #E2E8F0;border-radius:8px;}}")
-            fl = QHBoxLayout(f); fl.setContentsMargins(18, 12, 18, 12)
-            lbl = QLabel(label); lbl.setStyleSheet(f"color:{TEXT_MUTED};font-size:13px;font-weight:600;border:none;")
-            val = QLabel(f"{int(amount):,} ₫")
-            val.setFont(QFont("Arial", 14, QFont.Weight.Bold))
-            val.setStyleSheet(f"color:{color};border:none;")
-            fl.addWidget(lbl); fl.addStretch(); fl.addWidget(val)
-            lay.addWidget(f)
-
-        _money_row("Phải nộp (sau miễn giảm)", actual, "#2563EB")
-        _money_row("Đã nộp", da_nop, SUCCESS)
-        _money_row("Còn thiếu", con_thieu, DANGER if con_thieu > 0 else SUCCESS)
-
-        if mien_giam > 0:
-            note = QLabel(f"Miễn giảm: {int(mien_giam):,} ₫  —  {t.get('ly_do_mien_giam') or 'Không ghi lý do'}")
-            note.setStyleSheet(f"color:{TEXT_MUTED};font-size:12px;font-family:Arial;border:none;")
-            lay.addWidget(note)
-        lay.addStretch()
+        self._tuition_content_lay = QVBoxLayout(w)
+        self._tuition_content_lay.setContentsMargins(24, 20, 24, 20)
+        self._tuition_content_lay.setSpacing(14)
+        self._tuition_content_lay.addWidget(self._loading_label())
         return w
 
     # ── Tab 4: Giấy tờ ────────────────────────────────────────────────────
     def _build_tab_docs(self) -> QWidget:
-        w = QWidget(); w.setStyleSheet("background:#FFFFFF;")
-        lay = QVBoxLayout(w); lay.setContentsMargins(16, 12, 16, 12); lay.setSpacing(8)
-
-        # Summary
-        total  = len(self._docs)
-        da_nop = sum(1 for d in self._docs if d.da_nop)
-        clr    = SUCCESS if da_nop == total else DANGER
-        sum_lbl = QLabel(f"Đã nộp: {da_nop}/{total} giấy tờ")
-        sum_lbl.setStyleSheet(f"color:{clr};font-size:13px;font-weight:700;font-family:Arial;border:none;")
-        lay.addWidget(sum_lbl)
-
-        if not self._docs:
-            lay.addWidget(QLabel("Chưa có thông tin giấy tờ").also(  # dummy
-                lambda l: l.setStyleSheet(f"color:{TEXT_MUTED};font-size:13px;")
-            ) if False else self._no_data_lbl("Chưa có thông tin giấy tờ"))
-            lay.addStretch(); return w
-
-        doc_cols = ["Loại giấy tờ", "Trạng thái", "Ngày nộp", "File đính kèm", "Ghi chú"]
-        tbl = QTableWidget()
-        tbl.setColumnCount(len(doc_cols))
-        tbl.setHorizontalHeaderLabels(doc_cols)
-        tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
-        tbl.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
-        tbl.verticalHeader().setVisible(False)
-        tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
-        tbl.setAlternatingRowColors(True)
-        tbl.setStyleSheet("""
-            QTableWidget{background:#FFFFFF;border:none;color:#1E293B;font-size:13px;font-family:Arial;gridline-color:#F1F5F9;}
-            QTableWidget::item{padding:6px 10px;}QTableWidget::item:selected{background:#DBEAFE;color:#1E3A8A;}
-            QTableWidget::item:alternate{background:#F8FAFC;}
-            QHeaderView::section{background:#F1F5F9;color:#475569;font-size:11px;font-weight:700;padding:8px 10px;border:none;border-bottom:2px solid #E2E8F0;}
-        """)
-        tbl.setColumnWidth(1, 100); tbl.setColumnWidth(2, 100); tbl.setColumnWidth(3, 160); tbl.setColumnWidth(4, 150)
-        tbl.verticalHeader().setDefaultSectionSize(38)
-        tbl.setRowCount(len(self._docs))
-        for r, doc in enumerate(self._docs):
-            tbl.setItem(r, 0, _tbl_item(doc.loai_giay))
-            tt_it = _tbl_item("✓ Đã nộp" if doc.da_nop else "✗ Chưa nộp", center=True, bold=True)
-            tt_it.setForeground(QColor(SUCCESS if doc.da_nop else DANGER))
-            tbl.setItem(r, 1, tt_it)
-            tbl.setItem(r, 2, _tbl_item(fmt_date(doc.ngay_nop) if doc.ngay_nop else "—", center=True))
-            tbl.setItem(r, 3, _tbl_item(doc.file_name if doc.has_file else "Chưa có file"))
-            tbl.setItem(r, 4, _tbl_item(doc.ghi_chu or ""))
-        lay.addWidget(tbl)
-        return w
+        self._doc_tab = StudentDocTab(self._mssv, self._doc_alert_container)
+        return self._doc_tab
 
     # ── Actions ───────────────────────────────────────────────────────────
     def _open_edit(self, d: dict):
@@ -941,15 +980,15 @@ class StudentProfileDialog(QDialog):
             QMessageBox.warning(self, "Lỗi xuất hồ sơ", str(e))
 
     # ── Helpers ───────────────────────────────────────────────────────────
-    def _warn_lbl(self, missing) -> QLabel:
-        l = QLabel(f"⚠  Còn thiếu {len(missing)} giấy tờ: {', '.join(d.loai_giay for d in missing)}")
-        l.setStyleSheet("color:#DC2626;font-size:12px;font-weight:600;border:none;font-family:Arial;")
-        l.setWordWrap(True)
-        return l
-
     def _no_data_lbl(self, text: str) -> QLabel:
         l = QLabel(text)
         l.setStyleSheet(f"color:{TEXT_MUTED};font-size:13px;font-family:Arial;border:none;")
+        return l
+
+    def _loading_label(self) -> QLabel:
+        l = QLabel("Đang tải...")
+        l.setStyleSheet(f"color:{TEXT_MUTED};font-size:13px;font-family:Arial;border:none;")
+        l.setAlignment(Qt.AlignmentFlag.AlignCenter)
         return l
 
     # ── Helpers layout ────────────────────────────────────────────────────

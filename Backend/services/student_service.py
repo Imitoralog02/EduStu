@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import or_
 from fastapi import HTTPException
 
-from models.student import Student
+from models.student import Student, StudentStatusLog
 from models.grade import Grade
 from models.course import Course
 from models.document import StudentDocument
@@ -108,24 +108,64 @@ def create_student(db: Session, data: dict) -> dict:
     return _to_out(sv, None)
 
 
-def update_student(db: Session, mssv: str, data: dict) -> dict:
+def update_student(db: Session, mssv: str, data: dict, nguoi_thay_doi: str = None) -> dict:
     sv = db.query(Student).filter(Student.mssv == mssv).first()
     if not sv:
         raise HTTPException(status_code=404, detail="Không tìm thấy sinh viên")
+    old_tt = sv.trang_thai
     for field, value in data.items():
         setattr(sv, field, value)
+    if "trang_thai" in data and data["trang_thai"] != old_tt:
+        db.add(StudentStatusLog(
+            mssv=mssv,
+            trang_thai_cu=old_tt,
+            trang_thai_moi=data["trang_thai"],
+            ly_do=data.get("ly_do_doi_tt"),
+            nguoi_thay_doi=nguoi_thay_doi,
+        ))
     db.commit()
     db.refresh(sv)
     return _to_out(sv, _compute_gpa(db, mssv))
 
 
-def delete_student(db: Session, mssv: str) -> dict:
+def delete_student(db: Session, mssv: str, nguoi_thay_doi: str = None) -> dict:
     sv = db.query(Student).filter(Student.mssv == mssv).first()
     if not sv:
         raise HTTPException(status_code=404, detail="Không tìm thấy sinh viên")
+    old_tt = sv.trang_thai
     sv.trang_thai = "Thôi học"
+    if old_tt != "Thôi học":
+        db.add(StudentStatusLog(
+            mssv=mssv,
+            trang_thai_cu=old_tt,
+            trang_thai_moi="Thôi học",
+            nguoi_thay_doi=nguoi_thay_doi,
+        ))
     db.commit()
     return {"message": f"Đã cập nhật trạng thái sinh viên {mssv} thành 'Thôi học'"}
+
+
+def get_status_history(db: Session, mssv: str) -> list:
+    sv = db.query(Student).filter(Student.mssv == mssv).first()
+    if not sv:
+        raise HTTPException(status_code=404, detail="Không tìm thấy sinh viên")
+    logs = (
+        db.query(StudentStatusLog)
+        .filter(StudentStatusLog.mssv == mssv)
+        .order_by(StudentStatusLog.thoi_gian.desc())
+        .all()
+    )
+    return [
+        {
+            "id": log.id,
+            "trang_thai_cu": log.trang_thai_cu,
+            "trang_thai_moi": log.trang_thai_moi,
+            "ly_do": log.ly_do,
+            "nguoi_thay_doi": log.nguoi_thay_doi,
+            "thoi_gian": str(log.thoi_gian),
+        }
+        for log in logs
+    ]
 
 
 def export_student_profile(db: Session, mssv: str) -> bytes:

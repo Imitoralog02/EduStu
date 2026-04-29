@@ -1,7 +1,12 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from database import engine, Base
+import models.student  # noqa: F401 — đảm bảo StudentStatusLog được đăng ký trước create_all
 from routers import auth, students, courses, grades, tuition, reports, documents
+
+# Tạo bảng mới nếu chưa tồn tại (safe, không xóa dữ liệu cũ)
+Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="EduStu API",

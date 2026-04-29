@@ -8,6 +8,7 @@ from PyQt6.QtWidgets import (
     QSizePolicy,
 )
 from PyQt6.QtCore import Qt, QDate, QSize
+from utils.helpers import fmt_date
 from PyQt6.QtGui import QFont, QColor, QPixmap
 from views.base_view import BaseView, QSS_INPUT, make_card
 from controllers.document import DocumentController
@@ -88,6 +89,7 @@ class DocumentView(BaseView):
     def __init__(self):
         self._ctrl = DocumentController()
         self._selected_mssv: str | None = None
+        self._selected_data = None
         self._rows: list[StudentRow] = []
         self._all_summary: list = []
         self._doc_data: list = []
@@ -173,13 +175,34 @@ class DocumentView(BaseView):
 
         # Cột phải
         right = QVBoxLayout(); right.setSpacing(10)
-        self._info_card = make_card(radius=12); self._info_card.setFixedHeight(80)
-        il = QVBoxLayout(self._info_card); il.setContentsMargins(18,10,18,10); il.setSpacing(3)
+        self._info_card = make_card(radius=12); self._info_card.setFixedHeight(100)
+        il = QHBoxLayout(self._info_card); il.setContentsMargins(18, 10, 18, 10); il.setSpacing(12)
+
+        info_col = QVBoxLayout(); info_col.setSpacing(3)
         self._lbl_sv_name = QLabel("Chọn sinh viên để xem giấy tờ")
-        self._lbl_sv_name.setFont(QFont("Arial", 14, QFont.Weight.Bold)); self._lbl_sv_name.setStyleSheet("color:#0F172A;border:none;")
-        self._lbl_sv_meta = QLabel(""); self._lbl_sv_meta.setStyleSheet("color:#64748B;font-size:12px;font-family:Arial;border:none;")
-        self._lbl_sv_stat = QLabel(""); self._lbl_sv_stat.setStyleSheet("font-size:13px;font-family:Arial;border:none;")
-        il.addWidget(self._lbl_sv_name); il.addWidget(self._lbl_sv_meta); right.addWidget(self._info_card)
+        self._lbl_sv_name.setFont(QFont("Arial", 14, QFont.Weight.Bold))
+        self._lbl_sv_name.setStyleSheet("color:#0F172A;border:none;")
+        self._lbl_sv_meta = QLabel("")
+        self._lbl_sv_meta.setStyleSheet("color:#64748B;font-size:12px;font-family:Arial;border:none;")
+        self._lbl_sv_stat = QLabel("")
+        self._lbl_sv_stat.setStyleSheet("font-size:13px;font-family:Arial;border:none;")
+        info_col.addWidget(self._lbl_sv_name)
+        info_col.addWidget(self._lbl_sv_meta)
+        info_col.addWidget(self._lbl_sv_stat)
+        il.addLayout(info_col, stretch=1)
+
+        self._btn_view_profile = QPushButton("👤  Xem hồ sơ đầy đủ")
+        self._btn_view_profile.setFixedSize(170, 40)
+        self._btn_view_profile.setCursor(Qt.CursorShape.PointingHandCursor)
+        self._btn_view_profile.setVisible(False)
+        self._btn_view_profile.setStyleSheet(
+            f"QPushButton{{background:{ACCENT};color:white;border:none;border-radius:8px;"
+            f"font-size:13px;font-weight:600;font-family:Arial;}}"
+            f"QPushButton:hover{{background:#1D4ED8;}}"
+        )
+        self._btn_view_profile.clicked.connect(self._open_profile)
+        il.addWidget(self._btn_view_profile)
+        right.addWidget(self._info_card)
 
         doc_card = make_card(radius=12); dl = QVBoxLayout(doc_card); dl.setContentsMargins(0,0,0,0)
         self._doc_table = QTableWidget()
@@ -300,6 +323,7 @@ class DocumentView(BaseView):
 
     def _select_student(self, mssv, data):
         self._selected_mssv = mssv
+        self._selected_data = data
         for row in self._rows: row.set_selected(row.mssv == mssv)
         khoa = data.khoa or "—"; lop = data.lop or "—"
         self._lbl_sv_name.setText(data.ho_ten)
@@ -308,11 +332,20 @@ class DocumentView(BaseView):
         status = "✓  Đầy đủ hồ sơ" if data.hoan_chinh else f"⚠  Còn thiếu {data.con_thieu} giấy tờ"
         self._lbl_sv_stat.setText(f"<span style='color:{clr};font-weight:700;font-size:13px;'>{data.da_nop}/{data.tong} — {status}</span>")
         self._lbl_sv_stat.setTextFormat(Qt.TextFormat.RichText)
-        info_card_lay = self._info_card.layout()
-        widgets_in_layout = [info_card_lay.itemAt(i).widget() for i in range(info_card_lay.count()) if info_card_lay.itemAt(i).widget()]
-        if self._lbl_sv_stat not in widgets_in_layout:
-            info_card_lay.addWidget(self._lbl_sv_stat)
+        self._btn_view_profile.setVisible(True)
         self.run_async(lambda: self._ctrl._svc.get_docs(mssv), self._render_docs, loading_text="Đang tải giấy tờ...")
+
+    def _open_profile(self):
+        if not self._selected_mssv:
+            return
+        try:
+            from controllers.student import StudentController
+            raw = StudentController()._svc.get_by_mssv(self._selected_mssv)
+        except Exception as e:
+            QMessageBox.warning(self, "Lỗi", str(e))
+            return
+        from views.student_view import StudentProfileDialog
+        StudentProfileDialog(data=raw).exec()
 
     def _render_docs(self, docs: list):
         self._doc_data = docs
@@ -751,3 +784,154 @@ class FilePreviewDialog(QDialog):
         btn_row = QHBoxLayout()
         btn_row.addStretch(); btn_row.addWidget(btn_close); btn_row.addStretch()
         root.addLayout(btn_row)
+
+
+# ── Hằng số & helper dùng chung ──────────────────────────────────────────────
+
+LOAI_GIAY_YEU_CAU = [
+    "CCCD/CMND", "Giấy khai sinh", "Học bạ THPT",
+    "Bằng tốt nghiệp THPT", "Ảnh thẻ 3x4", "Sổ hộ khẩu",
+]
+
+
+def show_required_docs_notice(parent):
+    msg = QMessageBox(parent)
+    msg.setWindowTitle("Thông báo hồ sơ nhập học")
+    msg.setIcon(QMessageBox.Icon.Information)
+    docs_list = "\n".join(f"  • {d}" for d in LOAI_GIAY_YEU_CAU)
+    msg.setText(
+        "Sinh viên mới đã được thêm thành công!\n\n"
+        "Yêu cầu nộp các giấy tờ hồ sơ sau:\n\n"
+        f"{docs_list}\n\n"
+        "Vui lòng cập nhật tình trạng nộp hồ sơ trong mục Giấy tờ."
+    )
+    msg.exec()
+
+
+def _clear_doc_layout(layout):
+    while layout.count():
+        item = layout.takeAt(0)
+        w = item.widget()
+        if w:
+            w.deleteLater()
+        elif item.layout():
+            _clear_doc_layout(item.layout())
+
+
+def _doc_tbl_item(text: str, center: bool = False, bold: bool = False) -> QTableWidgetItem:
+    it = QTableWidgetItem(str(text) if text is not None else "")
+    if center:
+        it.setTextAlignment(Qt.AlignmentFlag.AlignCenter)
+    if bold:
+        f = it.font(); f.setBold(True); it.setFont(f)
+    return it
+
+
+# ── Widget: Tab Giấy tờ nhúng trong StudentProfileDialog ─────────────────────
+
+class StudentDocTab(QWidget):
+    """Tab Giấy tờ dùng trong StudentProfileDialog."""
+
+    def __init__(self, mssv: str, alert_layout: QVBoxLayout):
+        super().__init__()
+        self._mssv         = mssv
+        self._docs         = []
+        self._alert_layout = alert_layout
+        self._ctrl         = DocumentController()
+        self._workers: list = []
+        self.setStyleSheet("background:#FFFFFF;")
+        self._lay = QVBoxLayout(self)
+        self._lay.setContentsMargins(16, 12, 16, 12)
+        self._lay.setSpacing(8)
+        loading = QLabel("Đang tải...")
+        loading.setStyleSheet(f"color:#94A3B8;font-size:13px;font-family:Arial;border:none;")
+        loading.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._lay.addWidget(loading)
+
+    def load(self):
+        from controllers.base import ApiWorker
+        w = ApiWorker(lambda: self._ctrl._svc.get_docs(self._mssv) or [])
+        w.success.connect(self._on_loaded)
+        w.start()
+        self._workers.append(w)
+
+    def _on_loaded(self, docs):
+        self._docs = docs or []
+        self._populate()
+        self._refresh_alert()
+
+    def _refresh_alert(self):
+        _clear_doc_layout(self._alert_layout)
+        missing = [d for d in self._docs if not d.da_nop]
+        if not missing:
+            return
+        alert = QFrame()
+        alert.setStyleSheet(
+            "QFrame{background:#FEF2F2;border:1px solid #FECACA;"
+            "border-radius:8px;margin-bottom:8px;}"
+        )
+        al = QHBoxLayout(alert)
+        al.setContentsMargins(14, 10, 14, 10)
+        warn = QLabel(
+            f"⚠  Còn thiếu {len(missing)} giấy tờ: "
+            f"{', '.join(d.loai_giay for d in missing)}"
+        )
+        warn.setStyleSheet(
+            "color:#DC2626;font-size:12px;font-weight:600;border:none;font-family:Arial;"
+        )
+        warn.setWordWrap(True)
+        al.addWidget(warn)
+        self._alert_layout.addWidget(alert)
+
+    def _populate(self):
+        _clear_doc_layout(self._lay)
+
+        total  = len(self._docs)
+        da_nop = sum(1 for d in self._docs if d.da_nop)
+        clr    = SUCCESS if da_nop == total and total > 0 else DANGER
+        sum_lbl = QLabel(f"Đã nộp: {da_nop}/{total} giấy tờ")
+        sum_lbl.setStyleSheet(
+            f"color:{clr};font-size:13px;font-weight:700;font-family:Arial;border:none;"
+        )
+        self._lay.addWidget(sum_lbl)
+
+        if not self._docs:
+            no_data = QLabel("Chưa có thông tin giấy tờ")
+            no_data.setStyleSheet(
+                f"color:#94A3B8;font-size:13px;font-family:Arial;border:none;"
+            )
+            self._lay.addWidget(no_data)
+            self._lay.addStretch()
+            return
+
+        doc_cols = ["Loại giấy tờ", "Trạng thái", "Ngày nộp", "File đính kèm", "Ghi chú"]
+        tbl = QTableWidget()
+        tbl.setColumnCount(len(doc_cols))
+        tbl.setHorizontalHeaderLabels(doc_cols)
+        tbl.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
+        tbl.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
+        tbl.verticalHeader().setVisible(False)
+        tbl.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.Stretch)
+        tbl.setAlternatingRowColors(True)
+        tbl.setStyleSheet("""
+            QTableWidget{background:#FFFFFF;border:none;color:#1E293B;font-size:13px;
+                font-family:Arial;gridline-color:#F1F5F9;}
+            QTableWidget::item{padding:6px 10px;}
+            QTableWidget::item:selected{background:#DBEAFE;color:#1E3A8A;}
+            QTableWidget::item:alternate{background:#F8FAFC;}
+            QHeaderView::section{background:#F1F5F9;color:#475569;font-size:11px;
+                font-weight:700;padding:8px 10px;border:none;border-bottom:2px solid #E2E8F0;}
+        """)
+        tbl.setColumnWidth(1, 100); tbl.setColumnWidth(2, 100)
+        tbl.setColumnWidth(3, 160); tbl.setColumnWidth(4, 150)
+        tbl.verticalHeader().setDefaultSectionSize(38)
+        tbl.setRowCount(len(self._docs))
+        for r, doc in enumerate(self._docs):
+            tbl.setItem(r, 0, _doc_tbl_item(doc.loai_giay))
+            tt_it = _doc_tbl_item("✓ Đã nộp" if doc.da_nop else "✗ Chưa nộp", center=True, bold=True)
+            tt_it.setForeground(QColor(SUCCESS if doc.da_nop else DANGER))
+            tbl.setItem(r, 1, tt_it)
+            tbl.setItem(r, 2, _doc_tbl_item(fmt_date(doc.ngay_nop) if doc.ngay_nop else "—", center=True))
+            tbl.setItem(r, 3, _doc_tbl_item(doc.file_name if doc.has_file else "Chưa có file"))
+            tbl.setItem(r, 4, _doc_tbl_item(doc.ghi_chu or ""))
+        self._lay.addWidget(tbl)

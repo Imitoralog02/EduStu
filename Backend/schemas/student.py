@@ -54,7 +54,7 @@ class StudentCreate(StudentBase):
 
 
 class StudentUpdate(StudentBase):
-    pass
+    ly_do_doi_tt: Optional[str] = None  # Lý do thay đổi trạng thái (chỉ dùng để log)
 
 
 class StudentOut(StudentBase):

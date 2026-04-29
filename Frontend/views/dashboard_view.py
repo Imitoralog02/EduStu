@@ -1,10 +1,11 @@
 from __future__ import annotations
+import math
 from PyQt6.QtWidgets import (
     QHBoxLayout, QVBoxLayout, QLabel, QFrame, QGridLayout,
-    QProgressBar, QGraphicsDropShadowEffect,
+    QProgressBar, QGraphicsDropShadowEffect, QSizePolicy,
 )
-from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QFont, QColor
+from PyQt6.QtCore import Qt, QRect, QRectF
+from PyQt6.QtGui import QFont, QColor, QPainter, QPen, QBrush, QPainterPath
 from views.base_view import BaseView, make_card
 from controllers.report import ReportController
 from utils.config import SUCCESS, WARNING, DANGER, INFO, TEXT_MUTED
@@ -242,8 +243,43 @@ class DashboardView(BaseView):
         alert_row.addWidget(c1); alert_row.addWidget(c2); alert_row.addWidget(c3)
         self._root.addLayout(alert_row)
 
+        # ── Row 4: Biểu đồ ───────────────────────────────────────────────
+        chart_row = QHBoxLayout()
+        chart_row.setSpacing(12)
+
+        # Pie chart — trạng thái sinh viên
+        pie_card = make_card(radius=14)
+        pie_lay = QVBoxLayout(pie_card)
+        pie_lay.setContentsMargins(20, 16, 20, 16)
+        pie_lay.setSpacing(8)
+        pie_title = QLabel("Phân bố trạng thái sinh viên")
+        pie_title.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        pie_title.setStyleSheet("color:#0F172A;border:none;")
+        pie_lay.addWidget(pie_title)
+        self._pie = PieChartWidget()
+        self._pie.setFixedHeight(200)
+        pie_lay.addWidget(self._pie)
+
+        # Bar chart — số SV theo khoa
+        bar_card = make_card(radius=14)
+        bar_lay = QVBoxLayout(bar_card)
+        bar_lay.setContentsMargins(20, 16, 20, 16)
+        bar_lay.setSpacing(8)
+        bar_title = QLabel("Sinh viên theo khoa")
+        bar_title.setFont(QFont("Arial", 13, QFont.Weight.Bold))
+        bar_title.setStyleSheet("color:#0F172A;border:none;")
+        bar_lay.addWidget(bar_title)
+        self._bar = BarChartWidget()
+        self._bar.setFixedHeight(200)
+        bar_lay.addWidget(self._bar)
+
+        chart_row.addWidget(pie_card, stretch=1)
+        chart_row.addWidget(bar_card, stretch=2)
+        self._root.addLayout(chart_row)
+
     def refresh(self):
         self.run_async(self._ctrl._svc.get_dashboard, self._render)
+        self.run_async(self._ctrl._svc.get_statistics, self._render_stats)
 
     def _render(self, data: dict):
         tong     = data.get("tong_sv", 0) or 1
@@ -308,3 +344,165 @@ class DashboardView(BaseView):
         _fill_col(self._al_hv_lay, self._al_hv_cnt, by_type["hoc_vu"],  DANGER)
         _fill_col(self._al_hp_lay, self._al_hp_cnt, by_type["hoc_phi"], WARNING)
         _fill_col(self._al_gt_lay, self._al_gt_cnt, by_type["giay_to"], INFO)
+
+        # Cập nhật pie chart trạng thái
+        self._pie.set_data([
+            ("Đang học",  dang_hoc, SUCCESS),
+            ("Bảo lưu",   bao_luu,  WARNING),
+            ("Cảnh báo",  canh_bao, DANGER),
+            ("Thôi học",  thoi_hoc, "#94A3B8"),
+        ])
+
+    def _render_stats(self, stats: list):
+        """Cập nhật bar chart sau khi load thống kê theo khoa."""
+        self._bar.set_data([(s["khoa"], s["tong_sv"]) for s in stats])
+
+
+# ── Biểu đồ tròn (Pie Chart) ─────────────────────────────────────────────────
+
+class PieChartWidget(QFrame):
+    """Vẽ pie chart + legend bằng QPainter thuần, không cần matplotlib."""
+
+    def __init__(self):
+        super().__init__()
+        self._slices: list[tuple[str, int, str]] = []  # (label, value, hex_color)
+        self.setStyleSheet("background:transparent;border:none;")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def set_data(self, slices: list[tuple[str, int, str]]):
+        self._slices = [(lbl, max(0, val), clr) for lbl, val, clr in slices]
+        self.update()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not self._slices:
+            return
+
+        total = sum(v for _, v, _ in self._slices)
+        if total == 0:
+            return
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w, h = self.width(), self.height()
+        legend_w = 130
+        diameter = min(h - 20, w - legend_w - 20)
+        if diameter < 20:
+            return
+        cx = diameter // 2 + 10
+        cy = h // 2
+        rect = QRectF(cx - diameter / 2, cy - diameter / 2, diameter, diameter)
+
+        angle = 90 * 16  # bắt đầu từ đỉnh (12 giờ)
+        for label, value, hex_clr in self._slices:
+            span = int(round(value / total * 360 * 16))
+            color = QColor(hex_clr)
+            p.setBrush(QBrush(color))
+            p.setPen(QPen(QColor("#FFFFFF"), 2))
+            p.drawPie(rect, angle, -span)
+            angle -= span
+
+        # Hole (donut effect)
+        hole_d = diameter * 0.45
+        p.setBrush(QBrush(QColor("#FFFFFF")))
+        p.setPen(Qt.PenStyle.NoPen)
+        p.drawEllipse(QRectF(cx - hole_d / 2, cy - hole_d / 2, hole_d, hole_d))
+
+        # Center text
+        p.setPen(QPen(QColor("#1E293B")))
+        p.setFont(QFont("Arial", 9, QFont.Weight.Bold))
+        p.drawText(QRect(int(cx - 30), int(cy - 10), 60, 20),
+                   Qt.AlignmentFlag.AlignCenter, str(total))
+        p.setFont(QFont("Arial", 8))
+        p.setPen(QPen(QColor("#64748B")))
+        p.drawText(QRect(int(cx - 30), int(cy + 4), 60, 16),
+                   Qt.AlignmentFlag.AlignCenter, "sinh viên")
+
+        # Legend
+        lx = cx + diameter // 2 + 16
+        ly = cy - len(self._slices) * 18 // 2
+        p.setFont(QFont("Arial", 10))
+        for label, value, hex_clr in self._slices:
+            p.setBrush(QBrush(QColor(hex_clr)))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(QRectF(lx, ly, 12, 12), 3, 3)
+            p.setPen(QPen(QColor("#1E293B")))
+            pct = round(value / total * 100)
+            p.drawText(QRect(lx + 18, ly - 2, legend_w - 20, 18),
+                       Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                       f"{label}  {pct}%")
+            ly += 22
+
+        p.end()
+
+
+# ── Biểu đồ cột (Bar Chart) ──────────────────────────────────────────────────
+
+class BarChartWidget(QFrame):
+    """Vẽ bar chart ngang bằng QPainter thuần."""
+
+    BAR_COLOR = "#2563EB"
+    BAR_COLOR_ALT = "#3B82F6"
+
+    def __init__(self):
+        super().__init__()
+        self._data: list[tuple[str, int]] = []
+        self.setStyleSheet("background:transparent;border:none;")
+        self.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Fixed)
+
+    def set_data(self, data: list[tuple[str, int]]):
+        self._data = sorted(data, key=lambda x: x[1], reverse=True)
+        self.update()
+
+    def paintEvent(self, event):
+        super().paintEvent(event)
+        if not self._data:
+            return
+
+        p = QPainter(self)
+        p.setRenderHint(QPainter.RenderHint.Antialiasing)
+
+        w, h = self.width(), self.height()
+        label_w = 160
+        pad_top = 10
+        pad_bottom = 10
+        n = len(self._data)
+        max_val = max(v for _, v in self._data) or 1
+
+        bar_area_w = w - label_w - 50  # 50 px cho số bên phải
+        row_h = (h - pad_top - pad_bottom) / n
+
+        for i, (label, value) in enumerate(self._data):
+            y = pad_top + i * row_h
+            bar_h = max(row_h * 0.5, 14)
+            bar_y = y + (row_h - bar_h) / 2
+            bar_w = bar_area_w * value / max_val
+
+            # Nền bar
+            p.setBrush(QBrush(QColor("#F1F5F9")))
+            p.setPen(Qt.PenStyle.NoPen)
+            p.drawRoundedRect(QRectF(label_w, bar_y, bar_area_w, bar_h), 4, 4)
+
+            # Bar thực
+            color = self.BAR_COLOR if i % 2 == 0 else self.BAR_COLOR_ALT
+            p.setBrush(QBrush(QColor(color)))
+            if bar_w > 0:
+                p.drawRoundedRect(QRectF(label_w, bar_y, bar_w, bar_h), 4, 4)
+
+            # Label khoa (rút ngắn nếu dài)
+            short = label if len(label) <= 22 else label[:20] + "…"
+            p.setPen(QPen(QColor("#475569")))
+            p.setFont(QFont("Arial", 10))
+            p.drawText(QRect(0, int(bar_y), label_w - 6, int(bar_h)),
+                       Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignRight,
+                       short)
+
+            # Số bên phải
+            p.setPen(QPen(QColor(color)))
+            p.setFont(QFont("Arial", 10, QFont.Weight.Bold))
+            p.drawText(QRect(int(label_w + bar_w + 6), int(bar_y), 44, int(bar_h)),
+                       Qt.AlignmentFlag.AlignVCenter | Qt.AlignmentFlag.AlignLeft,
+                       str(value))
+
+        p.end()

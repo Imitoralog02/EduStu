@@ -53,13 +53,22 @@ def create_student(body: StudentCreate, db: Session = Depends(get_db), _=Depends
 
 
 @router.put("/{mssv}", response_model=StudentOut)
-def update_student(mssv: str, body: StudentUpdate, db: Session = Depends(get_db), _=Depends(admin_or_phongdt)):
-    return svc.update_student(db, mssv, body.model_dump(exclude_unset=True))
+def update_student(mssv: str, body: StudentUpdate, db: Session = Depends(get_db),
+                   current_user=Depends(get_current_user)):
+    return svc.update_student(db, mssv, body.model_dump(exclude_unset=True),
+                               nguoi_thay_doi=current_user.username)
 
 
 @router.delete("/{mssv}")
-def delete_student(mssv: str, db: Session = Depends(get_db), _=Depends(admin_or_phongdt)):
-    return svc.delete_student(db, mssv)
+def delete_student(mssv: str, db: Session = Depends(get_db),
+                   current_user=Depends(get_current_user)):
+    return svc.delete_student(db, mssv, nguoi_thay_doi=current_user.username)
+
+
+@router.get("/{mssv}/lichsu-trangthai")
+def get_status_history(mssv: str, db: Session = Depends(get_db), _=Depends(admin_or_phongdt)):
+    """Lịch sử thay đổi trạng thái của 1 sinh viên."""
+    return svc.get_status_history(db, mssv)
 
 
 @router.get("/{mssv}/export")

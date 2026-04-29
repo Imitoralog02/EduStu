@@ -30,10 +30,6 @@ class TuitionView(BaseView):
         btn_tt.clicked.connect(lambda: PaymentForm(on_save=self.refresh).exec())
         self.add_action(btn_tt)
 
-        btn_ky = self.make_btn("🎓 Tạo học kỳ mới", "secondary")
-        btn_ky.clicked.connect(lambda: NewSemesterDialog(on_save=self.refresh).exec())
-        self.add_action(btn_ky)
-
         # Stat row — số lượng sinh viên
         stat_row = QHBoxLayout(); stat_row.setSpacing(10)
         stat_defs = [

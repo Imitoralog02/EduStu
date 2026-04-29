@@ -1,6 +1,22 @@
-from sqlalchemy import Column, String, Date, Enum, Integer
+from sqlalchemy import Column, String, Date, Enum, Integer, DateTime, ForeignKey, Text
 from sqlalchemy.orm import relationship
+from sqlalchemy.sql import func
 from database import Base
+
+
+class StudentStatusLog(Base):
+    """Lịch sử thay đổi trạng thái sinh viên."""
+    __tablename__ = "student_status_logs"
+
+    id             = Column(Integer, primary_key=True, autoincrement=True)
+    mssv           = Column(String(20), ForeignKey("students.mssv", ondelete="CASCADE"), nullable=False)
+    trang_thai_cu  = Column(String(50), nullable=True)
+    trang_thai_moi = Column(String(50), nullable=False)
+    ly_do          = Column(Text, nullable=True)
+    nguoi_thay_doi = Column(String(100), nullable=True)
+    thoi_gian      = Column(DateTime, server_default=func.now(), nullable=False)
+
+    student = relationship("Student", back_populates="status_logs")
 
 
 class Student(Base):
@@ -30,3 +46,5 @@ class Student(Base):
     grades      = relationship("Grade", back_populates="student", cascade="all, delete-orphan")
     tuition     = relationship("Tuition", back_populates="student", uselist=False, cascade="all, delete-orphan")
     documents   = relationship("StudentDocument", back_populates="student", cascade="all, delete-orphan")
+    status_logs = relationship("StudentStatusLog", back_populates="student", cascade="all, delete-orphan",
+                               order_by="StudentStatusLog.thoi_gian.desc()")
