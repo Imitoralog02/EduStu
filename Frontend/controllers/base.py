@@ -177,8 +177,9 @@ class ApiWorker(QThread):
         worker.start()
         self._workers.append(worker)   # giữ tham chiếu, tránh bị GC
     """
-    success = pyqtSignal(object)
-    error   = pyqtSignal(str)
+    success         = pyqtSignal(object)
+    error           = pyqtSignal(str)
+    session_expired = pyqtSignal()
 
     def __init__(self, fn, parent=None):
         super().__init__(parent)
@@ -189,6 +190,9 @@ class ApiWorker(QThread):
             result = self._fn()
             self.success.emit(result)
         except APIError as e:
-            self.error.emit(e.detail)
+            if e.status_code == 401:
+                self.session_expired.emit()
+            else:
+                self.error.emit(e.detail)
         except Exception as e:
             self.error.emit(str(e))

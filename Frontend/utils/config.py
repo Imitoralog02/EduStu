@@ -46,3 +46,29 @@ KHOA_LIST = [
     "Quản trị kinh doanh",
 ]
 GIOI_TINH = ["Nam", "Nữ", "Khác"]
+
+# ── Phân quyền theo module ────────────────────────────────────────────────────
+# Mỗi role được phép thực hiện các action nào trong từng module
+PERMISSIONS: dict[str, dict[str, list[str]]] = {
+    "admin": {
+        "sinhvien": ["view", "add", "edit", "delete"],
+        "giayto":   ["view", "edit", "manage_types"],
+        "hocphi":   ["view", "add", "edit"],
+        "baocao":   ["view", "export"],
+        "diem":     ["view", "add", "edit"],
+    },
+    "phongdt": {
+        "sinhvien": ["view", "add", "edit"],   # không xóa
+        "giayto":   ["view", "edit"],          # không quản lý loại GT
+        "hocphi":   ["view", "add", "edit"],
+        "baocao":   ["view", "export"],
+        "diem":     ["view", "add", "edit"],
+    },
+    "giaovien": {
+        "sinhvien": ["view"],                  # chỉ xem danh sách
+        "giayto":   [],                        # không truy cập
+        "hocphi":   [],                        # không truy cập
+        "baocao":   ["view"],
+        "diem":     ["view", "add", "edit"],   # nhập điểm
+    },
+}

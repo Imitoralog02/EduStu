@@ -35,3 +35,15 @@ class Session:
     @classmethod
     def can(cls, *roles: str) -> bool:
         return cls.role() in roles
+
+    @classmethod
+    def can_do(cls, module: str, action: str) -> bool:
+        """Kiểm tra role hiện tại có được phép thực hiện action trong module không.
+
+        Ví dụ:
+            Session.can_do("sinhvien", "delete")  → False nếu là phongdt
+            Session.can_do("giayto", "manage_types") → True nếu là admin
+        """
+        from utils.config import PERMISSIONS
+        role = cls.role() or ""
+        return action in PERMISSIONS.get(role, {}).get(module, [])
