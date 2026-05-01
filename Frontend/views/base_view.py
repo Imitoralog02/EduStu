@@ -4,7 +4,7 @@ from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QPushButton, QTableWidget, QTableWidgetItem,
     QHeaderView, QAbstractItemView, QMessageBox, QFrame,
-    QGraphicsDropShadowEffect, QSizePolicy
+    QGraphicsDropShadowEffect, QSizePolicy, QComboBox
 )
 from PyQt6.QtCore import Qt, QTimer, QRectF, QPointF, QSize
 from PyQt6.QtGui import QFont, QColor, QPainter, QLinearGradient, QBrush, QRadialGradient, QPen
@@ -557,9 +557,24 @@ class BaseView(AnimatedBackground):
         w = ApiWorker(fn)
         w.success.connect(_done)
         w.error.connect(_err)
+        w.session_expired.connect(self._on_session_expired)
         w.start()
         self._workers.append(w)
         return w
+
+    def _on_session_expired(self):
+        self._loading_count = 0
+        self._overlay.hide_loading()
+        from utils.session import Session
+        Session.clear()
+        QMessageBox.warning(
+            self, "Phiên đăng nhập hết hạn",
+            "Phiên làm việc đã hết hạn. Vui lòng đăng nhập lại."
+        )
+        # Tìm MainWindow và đóng lại để về màn hình login
+        top = self.window()
+        if top:
+            top.close()
 
     def resizeEvent(self, e):
         super().resizeEvent(e)
@@ -568,3 +583,225 @@ class BaseView(AnimatedBackground):
 
     def _default_error(self, msg: str):
         QMessageBox.warning(self, "Lỗi", msg)
+
+
+# ── Widget phân trang dùng chung ─────────────────────────────────────────────
+
+class PaginationBar(QWidget):
+    """
+    Thanh phân trang tái sử dụng.
+
+    Cách dùng:
+        self._pager = PaginationBar(on_change=self._load)
+        self._root.addWidget(self._pager)
+
+    Trong _load():
+        page      = self._pager.current_page
+        page_size = self._pager.page_size
+
+    Sau khi có data:
+        self._pager.update(total=data["total"])
+    """
+
+    PAGE_SIZES = [20, 50, 100]
+
+    def __init__(self, on_change, parent=None):
+        super().__init__(parent)
+        self._on_change   = on_change
+        self._current     = 1
+        self._total_pages = 1
+        self._total_items = 0
+        self._build()
+
+    # ── Build UI ─────────────────────────────────────────────────────────
+
+    def _build(self):
+        lay = QHBoxLayout(self)
+        lay.setContentsMargins(0, 4, 0, 0)
+        lay.setSpacing(6)
+
+        # Tổng số bản ghi
+        self._lbl_info = QLabel("")
+        self._lbl_info.setStyleSheet("color:#94A3B8;font-size:12px;font-family:Arial;")
+        lay.addWidget(self._lbl_info)
+        lay.addStretch()
+
+        # Nút trang đầu
+        self._btn_first = self._nav_btn("«")
+        self._btn_first.clicked.connect(lambda: self._go(1))
+        lay.addWidget(self._btn_first)
+
+        # Nút trang trước
+        self._btn_prev = self._nav_btn("‹")
+        self._btn_prev.clicked.connect(lambda: self._go(self._current - 1))
+        lay.addWidget(self._btn_prev)
+
+        # Các nút số trang
+        self._page_btns_lay = QHBoxLayout()
+        self._page_btns_lay.setSpacing(4)
+        lay.addLayout(self._page_btns_lay)
+
+        # Nút trang sau
+        self._btn_next = self._nav_btn("›")
+        self._btn_next.clicked.connect(lambda: self._go(self._current + 1))
+        lay.addWidget(self._btn_next)
+
+        # Nút trang cuối
+        self._btn_last = self._nav_btn("»")
+        self._btn_last.clicked.connect(lambda: self._go(self._total_pages))
+        lay.addWidget(self._btn_last)
+
+        # Chọn số dòng mỗi trang
+        sep = QLabel("|")
+        sep.setStyleSheet("color:#475569;font-size:13px;")
+        lay.addWidget(sep)
+
+        lbl_size = QLabel("Mỗi trang:")
+        lbl_size.setStyleSheet("color:#94A3B8;font-size:12px;font-family:Arial;")
+        lay.addWidget(lbl_size)
+
+        self._cmb_size = QComboBox()
+        self._cmb_size.addItems([str(s) for s in self.PAGE_SIZES])
+        self._cmb_size.setFixedSize(70, 28)
+        self._cmb_size.setStyleSheet("""
+            QComboBox {
+                background: rgba(255,255,255,0.08);
+                color: #F1F5F9;
+                border: 1px solid rgba(255,255,255,0.15);
+                border-radius: 6px;
+                padding: 0 8px;
+                font-size: 12px;
+                font-family: Arial;
+            }
+            QComboBox::drop-down { border: none; width: 18px; }
+            QComboBox QAbstractItemView {
+                background: #0F2355; color: #F1F5F9;
+                selection-background-color: #2563EB;
+                font-size: 12px;
+            }
+        """)
+        self._cmb_size.currentIndexChanged.connect(self._on_size_change)
+        lay.addWidget(self._cmb_size)
+
+        self._refresh_ui()
+
+    # ── Public API ────────────────────────────────────────────────────────
+
+    @property
+    def current_page(self) -> int:
+        return self._current
+
+    @property
+    def page_size(self) -> int:
+        return self.PAGE_SIZES[self._cmb_size.currentIndex()]
+
+    def update_total(self, total: int):
+        """Gọi sau khi có data từ API để cập nhật số trang."""
+        self._total_items = total
+        self._total_pages = max(1, -(-total // self.page_size))  # ceil division
+        self._current = min(self._current, self._total_pages)
+        self._refresh_ui()
+
+    def reset(self):
+        """Reset về trang 1 — gọi khi thay đổi bộ lọc."""
+        self._current = 1
+        self._refresh_ui()
+
+    # ── Internal ──────────────────────────────────────────────────────────
+
+    def _nav_btn(self, text: str) -> QPushButton:
+        btn = QPushButton(text)
+        btn.setFixedSize(28, 28)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        btn.setStyleSheet("""
+            QPushButton {
+                background: rgba(255,255,255,0.06);
+                color: #94A3B8;
+                border: 1px solid rgba(255,255,255,0.12);
+                border-radius: 6px;
+                font-size: 13px;
+                font-family: Arial;
+            }
+            QPushButton:hover:enabled { background: #2563EB; color: white; border-color: #2563EB; }
+            QPushButton:disabled { color: #334155; border-color: #1E3659; }
+        """)
+        return btn
+
+    def _page_btn(self, page: int) -> QPushButton:
+        btn = QPushButton(str(page))
+        btn.setFixedSize(28, 28)
+        btn.setCursor(Qt.CursorShape.PointingHandCursor)
+        is_current = page == self._current
+        btn.setStyleSheet(f"""
+            QPushButton {{
+                background: {'#2563EB' if is_current else 'rgba(255,255,255,0.06)'};
+                color: {'white' if is_current else '#94A3B8'};
+                border: 1px solid {'#2563EB' if is_current else 'rgba(255,255,255,0.12)'};
+                border-radius: 6px;
+                font-size: 12px;
+                font-family: Arial;
+                font-weight: {'700' if is_current else '400'};
+            }}
+            QPushButton:hover:enabled {{ background: #2563EB; color: white; border-color: #2563EB; }}
+        """)
+        btn.clicked.connect(lambda: self._go(page))
+        return btn
+
+    def _go(self, page: int):
+        page = max(1, min(page, self._total_pages))
+        if page == self._current:
+            return
+        self._current = page
+        self._refresh_ui()
+        self._on_change()
+
+    def _on_size_change(self):
+        self._current = 1
+        self._total_pages = max(1, -(-self._total_items // self.page_size))
+        self._refresh_ui()
+        self._on_change()
+
+    def _refresh_ui(self):
+        # Label thông tin
+        if self._total_items > 0:
+            start = (self._current - 1) * self.page_size + 1
+            end   = min(self._current * self.page_size, self._total_items)
+            self._lbl_info.setText(
+                f"Hiển thị {start}–{end} / {self._total_items} sinh viên"
+            )
+        else:
+            self._lbl_info.setText("Không có dữ liệu")
+
+        # Enable/disable nút điều hướng
+        self._btn_first.setEnabled(self._current > 1)
+        self._btn_prev.setEnabled(self._current > 1)
+        self._btn_next.setEnabled(self._current < self._total_pages)
+        self._btn_last.setEnabled(self._current < self._total_pages)
+
+        # Render nút số trang (hiện tối đa 7 trang, có "…")
+        while self._page_btns_lay.count():
+            item = self._page_btns_lay.takeAt(0)
+            if item.widget():
+                item.widget().deleteLater()
+
+        pages = self._visible_pages()
+        prev_p = None
+        for p in pages:
+            if prev_p is not None and p - prev_p > 1:
+                dot = QLabel("…")
+                dot.setStyleSheet("color:#475569;font-size:12px;")
+                dot.setFixedWidth(18)
+                self._page_btns_lay.addWidget(dot)
+            self._page_btns_lay.addWidget(self._page_btn(p))
+            prev_p = p
+
+    def _visible_pages(self) -> list[int]:
+        """Trả về list số trang cần hiển thị (có thể bỏ qua giữa với …)."""
+        n = self._total_pages
+        c = self._current
+        if n <= 7:
+            return list(range(1, n + 1))
+        pages = set()
+        pages.update([1, 2, n - 1, n])
+        pages.update(range(max(1, c - 1), min(n, c + 2)))
+        return sorted(pages)

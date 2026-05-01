@@ -10,10 +10,10 @@ from utils.config import PRIMARY, SECONDARY, ACCENT, TEXT_LIGHT, TEXT_MUTED, BOR
 
 NAV_ITEMS = [
     ("dashboard", "  Dashboard",        "admin phongdt giaovien"),
-    ("sinhvien",  "  Sinh viên",        "admin phongdt"),
+    ("sinhvien",  "  Sinh viên",        "admin phongdt giaovien"),
     ("giayto",    "  Hồ sơ sinh viên",  "admin phongdt"),
     ("hocphi",    "  Học phí",          "admin phongdt"),
-    ("baocao",    "  Báo cáo",          "admin phongdt"),
+    ("baocao",    "  Báo cáo",          "admin phongdt giaovien"),
 ]
 
 

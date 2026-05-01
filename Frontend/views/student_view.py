@@ -8,7 +8,7 @@ from PyQt6.QtWidgets import (
 )
 from PyQt6.QtCore import Qt, QTimer, QDate
 from PyQt6.QtGui import QFont, QColor
-from views.base_view import BaseView, QSS_INPUT, QSS_INPUT_LIGHT, QSS_TABLE
+from views.base_view import BaseView, QSS_INPUT, QSS_INPUT_LIGHT, QSS_TABLE, PaginationBar
 from controllers.student import StudentController
 from utils.config import (
     PRIMARY, SECONDARY, ACCENT, HIGHLIGHT, TEXT_LIGHT, TEXT_MUTED, BORDER,
@@ -33,13 +33,15 @@ class StudentView(BaseView):
         super().__init__()
 
     def build_ui(self):
-        # Action buttons
-        btn_add = self.make_btn("+ Thêm mới", "primary")
-        btn_add.clicked.connect(self._open_add)
+        # Action buttons — hiển thị theo quyền
+        from utils.session import Session
         btn_xl = self.make_btn("Xuất Excel")
         btn_xl.clicked.connect(self._export)
         self.add_action(btn_xl)
-        self.add_action(btn_add)
+        if Session.can_do("sinhvien", "add"):
+            btn_add = self.make_btn("+ Thêm mới", "primary")
+            btn_add.clicked.connect(self._open_add)
+            self.add_action(btn_add)
 
         # ── Toolbar cơ bản ────────────────────────────────────────────────
         tb = QHBoxLayout()
@@ -48,19 +50,19 @@ class StudentView(BaseView):
         self.inp_search.setPlaceholderText("Tìm theo MSSV hoặc họ tên...")
         self.inp_search.setFixedHeight(34)
         self.inp_search.setStyleSheet(QSS_INPUT)
-        self.inp_search.textChanged.connect(lambda: self._timer.start(400))
+        self.inp_search.textChanged.connect(self._on_filter_change)
 
         self.cmb_khoa = self._combo(["Tất cả khoa"] + self._khoa_list)
         self.cmb_tt   = self._combo(["Tất cả trạng thái"] + TRANG_THAI_SV)
-        self.cmb_khoa.currentIndexChanged.connect(self._load)
-        self.cmb_tt.currentIndexChanged.connect(self._load)
+        self.cmb_khoa.currentIndexChanged.connect(lambda: self._load(reset_page=True))
+        self.cmb_tt.currentIndexChanged.connect(lambda: self._load(reset_page=True))
 
         self.inp_lop = QLineEdit()
         self.inp_lop.setPlaceholderText("Lọc theo lớp...")
         self.inp_lop.setFixedHeight(34)
         self.inp_lop.setFixedWidth(120)
         self.inp_lop.setStyleSheet(QSS_INPUT)
-        self.inp_lop.textChanged.connect(lambda: self._timer.start(400))
+        self.inp_lop.textChanged.connect(self._on_filter_change)
 
         btn_adv = QPushButton("▼ Lọc nâng cao")
         btn_adv.setFixedHeight(34)
@@ -98,17 +100,17 @@ class StudentView(BaseView):
         self.inp_nam.setPlaceholderText("VD: 2022")
         self.inp_nam.setFixedSize(90, 30)
         self.inp_nam.setStyleSheet(QSS_INPUT)
-        self.inp_nam.textChanged.connect(lambda: self._timer.start(400))
+        self.inp_nam.textChanged.connect(self._on_filter_change)
         adv_lay.addWidget(self.inp_nam)
 
         self.chk_thieu_gt = QCheckBox("Thiếu giấy tờ")
         self.chk_thieu_gt.setStyleSheet(f"color:{TEXT_LIGHT};font-size:13px;")
-        self.chk_thieu_gt.stateChanged.connect(self._load)
+        self.chk_thieu_gt.stateChanged.connect(lambda: self._load(reset_page=True))
         adv_lay.addWidget(self.chk_thieu_gt)
 
         self.chk_no_hp = QCheckBox("Nợ học phí")
         self.chk_no_hp.setStyleSheet(f"color:{TEXT_LIGHT};font-size:13px;")
-        self.chk_no_hp.stateChanged.connect(self._load)
+        self.chk_no_hp.stateChanged.connect(lambda: self._load(reset_page=True))
         adv_lay.addWidget(self.chk_no_hp)
 
         btn_clear_adv = QPushButton("Xóa bộ lọc")
@@ -132,16 +134,21 @@ class StudentView(BaseView):
         self.table.setColumnWidth(3, 130)
         self.table.setColumnWidth(4, 100)
         self.table.setColumnWidth(5, 100)
+        self.table.cellDoubleClicked.connect(self._on_double_click)
         self._root.addWidget(self.table)
 
-        self.lbl_count = QLabel("")
-        self.lbl_count.setStyleSheet("color:#64748B;font-size:13px;font-family:Arial;")
-        self._root.addWidget(self.lbl_count)
+        self._pager = PaginationBar(on_change=self._load)
+        self._root.addWidget(self._pager)
 
     def _adv_label(self, text: str) -> QLabel:
         l = QLabel(text)
         l.setStyleSheet(f"color:{TEXT_MUTED};font-size:12px;border:none;")
         return l
+
+    def _on_filter_change(self):
+        """Gọi khi người dùng gõ tìm kiếm — debounce 400ms và reset trang 1."""
+        self._pager.reset()
+        self._timer.start(400)
 
     def _toggle_adv(self):
         visible = not self._adv_frame.isVisible()
@@ -152,6 +159,7 @@ class StudentView(BaseView):
         self.inp_nam.clear()
         self.chk_thieu_gt.setChecked(False)
         self.chk_no_hp.setChecked(False)
+        self._load(reset_page=True)
 
     def refresh(self):
         self._load_khoa_list()
@@ -173,7 +181,9 @@ class StudentView(BaseView):
 
         self._ctrl.load_khoa_list(on_success=_ok, on_error=lambda _: None)
 
-    def _load(self):
+    def _load(self, reset_page: bool = False):
+        if reset_page:
+            self._pager.reset()
         search        = self.inp_search.text().strip()
         khoa          = self.cmb_khoa.currentText() if self.cmb_khoa.currentIndex() > 0 else ""
         tt            = self.cmb_tt.currentText()   if self.cmb_tt.currentIndex()   > 0 else ""
@@ -182,9 +192,13 @@ class StudentView(BaseView):
         nam_nhap_hoc  = int(nam_txt) if nam_txt.isdigit() else None
         thieu_giay_to = self.chk_thieu_gt.isChecked() if hasattr(self, "chk_thieu_gt") else False
         no_hoc_phi    = self.chk_no_hp.isChecked()    if hasattr(self, "chk_no_hp")    else False
+        page      = self._pager.current_page
+        page_size = self._pager.page_size
         self.run_async(
             lambda: self._ctrl._svc.get_list(
                 search, khoa, tt, lop,
+                page=page,
+                page_size=page_size,
                 nam_nhap_hoc=nam_nhap_hoc,
                 thieu_giay_to=thieu_giay_to,
                 no_hoc_phi=no_hoc_phi,
@@ -195,8 +209,7 @@ class StudentView(BaseView):
     def _render(self, data: dict):
         items = data.get("items", [])
         total = data.get("total", len(items))
-        self.set_subtitle(f"Quản lý hồ sơ sinh viên")
-        self.lbl_count.setText(f"Hiển thị {len(items)} / {total} sinh viên")
+        self._pager.update_total(total)
         self.table.setRowCount(len(items))
 
         for row, sv in enumerate(items):
@@ -207,16 +220,19 @@ class StudentView(BaseView):
             self.table.setItem(row, 4, self.cell(fmt_date(sv.get("ngay_sinh", ""))))
             self.table.setItem(row, 5, self.badge_cell(sv.get("trang_thai", "")))
 
-            # Thao tác
+            # Thao tác — hiển thị theo quyền
+            from utils.session import Session
             mssv = sv.get("mssv", "")
             w = QWidget()
             hl = QHBoxLayout(w)
             hl.setContentsMargins(4, 2, 4, 2)
             hl.setSpacing(4)
-            for txt, fn, clr in [
-                ("Sửa",  lambda _, m=mssv: self._open_edit(m),    ACCENT),
-                ("Xóa",  lambda _, m=mssv: self._delete(m),       DANGER),
-            ]:
+            actions = []
+            if Session.can_do("sinhvien", "edit"):
+                actions.append(("Sửa", lambda _, m=mssv: self._open_edit(m), ACCENT))
+            if Session.can_do("sinhvien", "delete"):
+                actions.append(("Xóa", lambda _, m=mssv: self._delete(m), DANGER))
+            for txt, fn, clr in actions:
                 b = QPushButton(txt)
                 b.setFixedHeight(26)
                 b.setCursor(Qt.CursorShape.PointingHandCursor)
@@ -234,6 +250,14 @@ class StudentView(BaseView):
                 b.clicked.connect(fn)
                 hl.addWidget(b)
             self.table.setCellWidget(row, 6, w)
+
+    def _on_double_click(self, row: int, _: int):
+        from utils.session import Session
+        if not Session.can_do("sinhvien", "edit"):
+            return
+        mssv_item = self.table.item(row, 0)
+        if mssv_item:
+            self._open_edit(mssv_item.text())
 
     def _combo(self, items: list) -> QComboBox:
         c = QComboBox()
@@ -784,29 +808,29 @@ class StudentProfileDialog(QDialog):
 
         from models.student import Student as _Sv
         sv_tmp = _Sv(mssv=d.get("mssv", "?"), ho_ten=d.get("ho_ten", "?"))
-        av = QLabel(sv_tmp.avatar_text)
-        av.setFixedSize(64, 64)
-        av.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        av.setStyleSheet(
+        self._av_lbl = QLabel(sv_tmp.avatar_text)
+        self._av_lbl.setFixedSize(64, 64)
+        self._av_lbl.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self._av_lbl.setStyleSheet(
             "background:#DBEAFE;color:#2563EB;border-radius:32px;"
             "font-size:20px;font-weight:700;font-family:Arial;border:none;"
         )
         info_col = QVBoxLayout()
         info_col.setSpacing(3)
-        name_lbl = QLabel(d.get("ho_ten", "—"))
-        name_lbl.setFont(QFont("Arial", 15, QFont.Weight.Bold))
-        name_lbl.setStyleSheet("color:#0F172A;border:none;")
-        mssv_lbl = QLabel(f"MSSV: {d.get('mssv', '')}  ·  {d.get('lop', '')}  ·  {d.get('khoa', '')}")
-        mssv_lbl.setStyleSheet("color:#64748B;font-size:12px;font-family:Arial;border:none;")
+        self._name_lbl = QLabel(d.get("ho_ten", "—"))
+        self._name_lbl.setFont(QFont("Arial", 15, QFont.Weight.Bold))
+        self._name_lbl.setStyleSheet("color:#0F172A;border:none;")
+        self._mssv_lbl = QLabel(f"MSSV: {d.get('mssv', '')}  ·  {d.get('lop', '')}  ·  {d.get('khoa', '')}")
+        self._mssv_lbl.setStyleSheet("color:#64748B;font-size:12px;font-family:Arial;border:none;")
         tt = d.get("trang_thai", "")
         tt_clr = {"Đang học": SUCCESS, "Thôi học": DANGER, "Bảo lưu": WARNING}.get(tt, TEXT_MUTED)
-        tt_lbl = QLabel(f"● {tt}")
-        tt_lbl.setStyleSheet(f"color:{tt_clr};font-size:12px;font-weight:600;border:none;")
-        info_col.addWidget(name_lbl)
-        info_col.addWidget(mssv_lbl)
-        info_col.addWidget(tt_lbl)
+        self._tt_lbl = QLabel(f"● {tt}")
+        self._tt_lbl.setStyleSheet(f"color:{tt_clr};font-size:12px;font-weight:600;border:none;")
+        info_col.addWidget(self._name_lbl)
+        info_col.addWidget(self._mssv_lbl)
+        info_col.addWidget(self._tt_lbl)
         info_col.addStretch()
-        hl.addWidget(av)
+        hl.addWidget(self._av_lbl)
         hl.addLayout(info_col, stretch=1)
 
         # Nút chỉnh sửa trong header
@@ -818,7 +842,7 @@ class StudentProfileDialog(QDialog):
             f"border-radius:7px;font-size:12px;padding:0 14px;}}"
             f"QPushButton:hover{{background:{ACCENT};color:white;}}"
         )
-        btn_edit_hdr.clicked.connect(lambda: self._open_edit(d))
+        btn_edit_hdr.clicked.connect(lambda: self._open_edit(self._data))
         hl.addWidget(btn_edit_hdr)
         root.addWidget(header)
 
@@ -956,12 +980,33 @@ class StudentProfileDialog(QDialog):
 
     # ── Actions ───────────────────────────────────────────────────────────
     def _open_edit(self, d: dict):
-        ctrl = StudentController()
+        def _after_save():
+            try:
+                updated = StudentController()._svc.get_by_mssv(self._mssv)
+                self._data = updated
+                self._reload_header(updated)
+            except Exception:
+                pass
+
         dlg = StudentForm(
-            data=d, on_save=lambda: None,
+            data=d, on_save=_after_save,
             khoa_list=list(KHOA_LIST),
         )
         dlg.exec()
+
+    def _reload_header(self, d: dict):
+        from models.student import Student as _Sv
+        sv_tmp = _Sv(mssv=d.get("mssv", "?"), ho_ten=d.get("ho_ten", "?"))
+        self._av_lbl.setText(sv_tmp.avatar_text)
+        self._name_lbl.setText(d.get("ho_ten", "—"))
+        self._mssv_lbl.setText(
+            f"MSSV: {d.get('mssv', '')}  ·  {d.get('lop', '')}  ·  {d.get('khoa', '')}"
+        )
+        tt = d.get("trang_thai", "")
+        from utils.config import SUCCESS, DANGER, WARNING, TEXT_MUTED
+        tt_clr = {"Đang học": SUCCESS, "Thôi học": DANGER, "Bảo lưu": WARNING}.get(tt, TEXT_MUTED)
+        self._tt_lbl.setText(f"● {tt}")
+        self._tt_lbl.setStyleSheet(f"color:{tt_clr};font-size:12px;font-weight:600;border:none;")
 
     def _export_profile(self):
         mssv = self._data.get("mssv", "")

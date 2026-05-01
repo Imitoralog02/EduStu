@@ -96,10 +96,12 @@ class DocumentView(BaseView):
         super().__init__()
 
     def build_ui(self):
-        # Action button quản lý loại giấy tờ
-        btn_manage = self.make_btn("⚙ Loại giấy tờ", "secondary")
-        btn_manage.clicked.connect(lambda: DocTypeManagerDialog(self._ctrl, on_change=self.refresh).exec())
-        self.add_action(btn_manage)
+        # Action button quản lý loại giấy tờ — chỉ admin
+        from utils.session import Session
+        if Session.can_do("giayto", "manage_types"):
+            btn_manage = self.make_btn("⚙ Loại giấy tờ", "secondary")
+            btn_manage.clicked.connect(lambda: DocTypeManagerDialog(self._ctrl, on_change=self.refresh).exec())
+            self.add_action(btn_manage)
 
         # ── Banner cảnh báo ───────────────────────────────────────────────────
         self._banner_frame = QFrame(); self._banner_frame.setVisible(False)
@@ -396,11 +398,13 @@ class DocumentView(BaseView):
             self._doc_table.setItem(r, 4, QTableWidgetItem(d.ghi_chu or ""))
 
             # Cột 5: Thao tác
+            from utils.session import Session
             action_w = QWidget(); action_hl = QHBoxLayout(action_w); action_hl.setContentsMargins(4,4,4,4); action_hl.setSpacing(4)
-            btn_update = QPushButton("Cập nhật"); btn_update.setFixedHeight(28); btn_update.setCursor(Qt.CursorShape.PointingHandCursor)
-            btn_update.setStyleSheet(f"QPushButton{{background:{INFO};color:white;border:none;border-radius:5px;font-size:11px;padding:0 10px;}}QPushButton:hover{{background:#1D4ED8;}}")
-            btn_update.clicked.connect(lambda _, doc=d: self._open_update(doc))
-            action_hl.addWidget(btn_update)
+            if Session.can_do("giayto", "edit"):
+                btn_update = QPushButton("Cập nhật"); btn_update.setFixedHeight(28); btn_update.setCursor(Qt.CursorShape.PointingHandCursor)
+                btn_update.setStyleSheet(f"QPushButton{{background:{INFO};color:white;border:none;border-radius:5px;font-size:11px;padding:0 10px;}}QPushButton:hover{{background:#1D4ED8;}}")
+                btn_update.clicked.connect(lambda _, doc=d: self._open_update(doc))
+                action_hl.addWidget(btn_update)
             self._doc_table.setCellWidget(r, 5, action_w)
 
     def _open_update(self, doc):
