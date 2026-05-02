@@ -19,8 +19,9 @@ NAV_ITEMS = [
 
 class MainWindow(QMainWindow):
 
-    def __init__(self):
+    def __init__(self, on_logout=None):
         super().__init__()
+        self._on_logout = on_logout
         self.setWindowTitle("EduStu")
         self.setMinimumSize(1200, 700)
         self.setStyleSheet(f"""
@@ -210,3 +211,5 @@ class MainWindow(QMainWindow):
         if reply == QMessageBox.StandardButton.Yes:
             Session.clear()
             self.close()
+            if self._on_logout:
+                self._on_logout()

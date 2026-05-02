@@ -43,17 +43,22 @@ def main():
     """)
 
     main_win = None
+    login_win = None
+
+    def show_login():
+        nonlocal login_win
+        from views.login_view import LoginView
+        login_win = LoginView(on_success=on_login_success)
+        login_win.show()
 
     def on_login_success(user):
         nonlocal main_win
         login_win.close()
         from views.main_window import MainWindow
-        main_win = MainWindow()
+        main_win = MainWindow(on_logout=show_login)
         main_win.show()
 
-    from views.login_view import LoginView
-    login_win = LoginView(on_success=on_login_success)
-    login_win.show()
+    show_login()
 
     sys.exit(app.exec())
 
